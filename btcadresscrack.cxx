@@ -1,3 +1,5 @@
+#include "wordlist.h"
+#include "cryptopp/eccrypto.h"
 #include "cryptopp/osrng.h"
 #include "cryptopp/oids.h"
 #include "cryptopp/pwdbased.h"
@@ -24,7 +26,7 @@ int main(){
 
     // test private key from mnemonic
     //std::string someseed = "hollow blast abandon ability able about above absent absorb abstract absurd absurd";
-    byte password[] ="punch shock entire north file identify";
+    byte password[] ="carpet rough dish always rich primary service use crisp media purchase apple";
     size_t plen = strlen((const char*)password);
 
     byte salt[] = "mnemonic";
@@ -83,13 +85,29 @@ int main(){
     ECDSA<ECP, SHA256>::PublicKey pubKey;
     privKey.MakePublicKey(pubKey);
 
+    pubKey.AccessGroupParameters().SetPointCompression(true);
     std::cout << "Public element x: " << std::hex << pubKey.GetPublicElement().x << std::endl;
     std::cout << "Public element y: " << std::hex << pubKey.GetPublicElement().y << std::endl;
 
-    // Hash public key to find public address
-    MD5 hash;
-    byte digest[ MD5::DIGESTSIZE ];
+    // Public key compression
+    byte compressedPubKey_byte[32];
+    pubKey.GetPublicElement().x.Encode(compressedPubKey_byte, 32);
+    std::string compressedPubKey_str;
+    HexEncoder comppubkey_encoder(new StringSink(compressedPubKey_str));
+    comppubkey_encoder.Put(compressedPubKey_byte, sizeof(compressedPubKey_byte));
+    secret_encoder.MessageEnd();
+    if(pubKey.GetPublicElement().y.IsEven()){
+        compressedPubKey_str = "02" + compressedPubKey_str;
+    }
+    else{
+        compressedPubKey_str = "03" + compressedPubKey_str;
+    }
+    std::cout << "Compressed public key: " << compressedPubKey_str << std::endl;
 
-    hash.CalculateDigest( digest, pubKey.GetPublicElement().x, sizeof(pubKey.GetPublicElement().x) );
+    // Hash public key to find public address
+    //MD5 hash;
+    //byte digest[ MD5::DIGESTSIZE ];
+
+    //hash.CalculateDigest( digest, pubKey.GetPublicElement().x, sizeof(pubKey.GetPublicElement().x) );
     return 0;
 }
