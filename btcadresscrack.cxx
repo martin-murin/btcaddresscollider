@@ -1,9 +1,11 @@
 #include "wordlist.h"
+#include "segwit_addr.h"
 #include "cryptopp/eccrypto.h"
 #include "cryptopp/osrng.h"
 #include "cryptopp/oids.h"
 #include "cryptopp/pwdbased.h"
 #include "cryptopp/sha.h"
+#include "cryptopp/ripemd.h"
 #include "cryptopp/hex.h"
 
 #include <iostream>
@@ -134,10 +136,28 @@ int main(){
     byteToStr(compressedPubKey, sizeof(compressedPubKey), compressedPubKey_str);
     std::cout << "Compressed Public Key: " << compressedPubKey_str << std::endl;
 
-    // Hash public key to find public address
-    //MD5 hash;
-    //byte digest[ MD5::DIGESTSIZE ];
+    // Pay-To-Witness-Public-Key-Hash Address (native segwit)
+    // ripemd160(sha256(compressedPubKey))
+    SHA256 hashSHA256;
+    RIPEMD160 hashRIPEMD160;
 
-    //hash.CalculateDigest( digest, pubKey.GetPublicElement().x, sizeof(pubKey.GetPublicElement().x) );
+    byte hashedPubKey[RIPEMD160::DIGESTSIZE];
+    ArraySource arrsrc2(compressedPubKey, sizeof(compressedPubKey), true,
+        new HashFilter(hashSHA256,
+            new HashFilter(hashRIPEMD160,
+                new ArraySink(hashedPubKey, RIPEMD160::DIGESTSIZE)
+            )
+        )
+    );
+
+    std::string hashedPubKey_str;
+    byteToStr(hashedPubKey, RIPEMD160::DIGESTSIZE, hashedPubKey_str);
+    std::cout << "Hashed Public Key: " << hashedPubKey_str << std::endl;
+
+    std::string hrp = "bc";
+    int witver = 0;
+    std::vector<uint8_t> witprog(&hashedPubKey[0], &hashedPubKey[RIPEMD160::DIGESTSIZE]);
+    std::string address_p2wpkh = segwit_addr::encode(hrp, witver, witprog); 
+    std::cout << "Address: " << address_p2wpkh << std::endl;
     return 0;
 }
