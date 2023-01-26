@@ -114,21 +114,27 @@ int main(){
     std::cout << "Public element y: " << std::hex << pubKey.GetPublicElement().y << std::endl;
 
     // Public key compression
-    byte compressedPubKey_byte[32];
-    pubKey.GetPublicElement().x.Encode(compressedPubKey_byte, 32);
-    std::string compressedPubKey_str;
-    HexEncoder comppubkey_encoder(new StringSink(compressedPubKey_str));
-    comppubkey_encoder.Put(compressedPubKey_byte, sizeof(compressedPubKey_byte));
-    secret_encoder.MessageEnd();
+    byte pubKeyElementX[32];
+    byte pubKeyElementY[32];
+    pubKey.GetPublicElement().x.Encode(pubKeyElementX, sizeof(pubKeyElementX));
+    pubKey.GetPublicElement().y.Encode(pubKeyElementY, sizeof(pubKeyElementY));
+
+    byte prefix;
     if(pubKey.GetPublicElement().y.IsEven()){
-        compressedPubKey_str = "02" + compressedPubKey_str;
+        prefix = 0x02;
     }
     else{
-        compressedPubKey_str = "03" + compressedPubKey_str;
+        prefix = 0x03;
     }
-    std::cout << "Compressed public key: " << compressedPubKey_str << std::endl;
-    byte compresedPubKey[34];
-    //strToByte(compressedPubKey_str, &compresedPubKey, 34);
+
+    byte compressedPubKey[33];
+    memcpy(&compressedPubKey, &prefix, 1);
+    memcpy(&(compressedPubKey[1]), &pubKeyElementX, 32);
+
+    // Output compressed public key
+    std::string compressedPubKey_str;
+    byteToStr(compressedPubKey, sizeof(compressedPubKey), compressedPubKey_str);
+    std::cout << "Compressed Public Key: " << compressedPubKey_str << std::endl;
 
     // Hash public key to find public address
     //MD5 hash;
