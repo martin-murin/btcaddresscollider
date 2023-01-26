@@ -26,43 +26,61 @@ int main(){
 
     // test private key from mnemonic
     //std::string someseed = "hollow blast abandon ability able about above absent absorb abstract absurd absurd";
-    byte password[] ="carpet rough dish always rich primary service use crisp media purchase apple";
-    size_t plen = strlen((const char*)password);
+    byte mnemonic_sentence[] ="carpet rough dish always rich primary service use crisp media purchase apple";
+    //byte mnemonic_sentence[] = "lucky labor rally law toss orange weasel try surge meadow type crumble proud slide century";
+    size_t mnemlen = strlen((const char*) mnemonic_sentence);
 
     byte salt[] = "mnemonic";
     size_t slen = strlen((const char*)salt);
 
-    byte derived[SHA512::DIGESTSIZE];
+    byte derived_seed[SHA512::DIGESTSIZE];
     PKCS5_PBKDF2_HMAC<SHA512> pbkdf;
     byte unused = 0;
-    pbkdf.DeriveKey(derived, sizeof(derived), unused, password, plen, salt, slen, 2048, 0.0f);  
+    pbkdf.DeriveKey(derived_seed, sizeof(derived_seed), unused, mnemonic_sentence, mnemlen, salt, slen, 2048, 0.0f);  
 
     // Output derived seed
-    std::string resultx;
-    HexEncoder encoder(new StringSink(resultx));
-    encoder.Put(derived, sizeof(derived));
+    std::string derived_seed_str;
+    HexEncoder encoder(new StringSink(derived_seed_str));
+    encoder.Put(derived_seed, sizeof(derived_seed));
     encoder.MessageEnd();
-    std::cout << "Derived: " << resultx << std::endl;
+    std::cout << "Derived Seed: " << derived_seed_str << std::endl;
    
-    // Second hashing of derived seed to get the root_key
+    // Generate master extended keys using HMAC SHA512 and Bitcoin seed
     byte root_salt[] = "Bitcoin seed";
     size_t root_slen = strlen((const char*)root_salt);
 
-    byte root_key[SHA512::DIGESTSIZE];
-    pbkdf.DeriveKey(root_key, sizeof(root_key), unused, derived, sizeof(derived), root_salt, root_slen, 2048, 0.0f);
+    byte master_ext_key[SHA512::DIGESTSIZE];
+    byte key[] = "Bitcoin seed";
+    HMAC< SHA512 > hmac(root_salt, sizeof(root_salt));
+    StringSource ss2(derived_seed, sizeof(derived_seed), true,
+        new HashFilter(hmac,
+            new ArraySink(master_ext_key, SHA512::DIGESTSIZE)
+        ) // HashFilter
+    ); // StringSource
+
+    std::string master_ext_key_str;
+    master_ext_key_str.clear();
+    StringSource ss3(master_ext_key, sizeof(master_ext_key), true,
+        new HexEncoder(
+            new StringSink(master_ext_key_str)
+        ) // HexEncoder
+    ); // StringSource
+
+    std::cout << "Master Extended Key (Root Key): " << master_ext_key_str << std::endl;
+
 
     // Split root key into secret and chain parts
-    int secret_size = sizeof(root_key) / 2;
+    int secret_size = sizeof(master_ext_key) / 2;
     byte secret_key[secret_size];
     byte chain_key[secret_size];
 
     for (int i=0; i<secret_size; i++) {
-        secret_key[i] = root_key[i];
-        chain_key[i]  = root_key[i + secret_size];
+        secret_key[i] = master_ext_key[i];
+        chain_key[i]  = master_ext_key[i + secret_size];
     }
     
     // Output secret key
-    std::cout << "Root key:   "; check_output_byte(root_key, 64);
+    std::cout << "Root key:   "; check_output_byte(master_ext_key, 64);
     std::cout << "Secret key: "; check_output_byte(secret_key, 32);
     std::cout << "Chain key:  "; check_output_byte(chain_key, 32);
 
