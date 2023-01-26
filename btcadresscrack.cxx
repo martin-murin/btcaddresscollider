@@ -14,11 +14,25 @@ using namespace CryptoPP;
 const char* targetHEX = "0x272063C80EBB47CFA3F4CC088187F4B15CE05F7E917BBE7830785B6B16F3CF";
 const char* targetB58 = "bc1q7kw2uepv6hfffhhxx2vplkkpcwsslcw9hsupc6";
 
+void byteToStr(const byte inputByteArr[], int size, std::string & outputStr){
+    ArraySource strsrc(inputByteArr, size, true,
+        new HexEncoder(
+            new StringSink(outputStr)
+        )
+    );
+}
+
+void strToByte(const std::string inputStr, byte (& outputByteArr)[], int size){
+    StringSource strsrc(inputStr, true,
+        new HexDecoder(
+            new ArraySink(outputByteArr, size)
+        )
+    );
+}
+
 void check_output_byte(const byte arr[], int size){
     std::string root_str;
-    HexEncoder root_encoder(new StringSink(root_str));
-    root_encoder.Put(arr, size);
-    root_encoder.MessageEnd();
+    byteToStr(arr, size, root_str);
     std::cout << root_str << std::endl;
 }
 
@@ -26,8 +40,8 @@ int main(){
 
     // test private key from mnemonic
     //std::string someseed = "hollow blast abandon ability able about above absent absorb abstract absurd absurd";
-    byte mnemonic_sentence[] ="carpet rough dish always rich primary service use crisp media purchase apple";
-    //byte mnemonic_sentence[] = "lucky labor rally law toss orange weasel try surge meadow type crumble proud slide century";
+    //byte mnemonic_sentence[] ="carpet rough dish always rich primary service use crisp media purchase apple";
+    byte mnemonic_sentence[] = "tip unfair advance patient action teach behind dawn street uphold arrest error";
     size_t mnemlen = strlen((const char*) mnemonic_sentence);
 
     byte salt[] = "mnemonic";
@@ -40,9 +54,7 @@ int main(){
 
     // Output derived seed
     std::string derived_seed_str;
-    HexEncoder encoder(new StringSink(derived_seed_str));
-    encoder.Put(derived_seed, sizeof(derived_seed));
-    encoder.MessageEnd();
+    byteToStr(derived_seed, sizeof(derived_seed), derived_seed_str);
     std::cout << "Derived Seed: " << derived_seed_str << std::endl;
    
     // Generate master extended keys using HMAC SHA512 and Bitcoin seed
@@ -50,22 +62,16 @@ int main(){
     size_t root_slen = strlen((const char*)root_salt);
 
     byte master_ext_key[SHA512::DIGESTSIZE];
-    byte key[] = "Bitcoin seed";
     HMAC< SHA512 > hmac(root_salt, sizeof(root_salt));
-    StringSource ss2(derived_seed, sizeof(derived_seed), true,
+    ArraySource arrsrc1(derived_seed, sizeof(derived_seed), true,
         new HashFilter(hmac,
             new ArraySink(master_ext_key, SHA512::DIGESTSIZE)
-        ) // HashFilter
-    ); // StringSource
-
+        )
+    );
+    
+    // Output master extended key
     std::string master_ext_key_str;
-    master_ext_key_str.clear();
-    StringSource ss3(master_ext_key, sizeof(master_ext_key), true,
-        new HexEncoder(
-            new StringSink(master_ext_key_str)
-        ) // HexEncoder
-    ); // StringSource
-
+    byteToStr(master_ext_key, sizeof(master_ext_key), master_ext_key_str);
     std::cout << "Master Extended Key (Root Key): " << master_ext_key_str << std::endl;
 
 
@@ -121,6 +127,8 @@ int main(){
         compressedPubKey_str = "03" + compressedPubKey_str;
     }
     std::cout << "Compressed public key: " << compressedPubKey_str << std::endl;
+    byte compresedPubKey[34];
+    //strToByte(compressedPubKey_str, &compresedPubKey, 34);
 
     // Hash public key to find public address
     //MD5 hash;
