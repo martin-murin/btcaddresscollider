@@ -80,10 +80,8 @@ int main(){
     byte secret_key[secret_size];
     byte chain_key[secret_size];
 
-    for (int i=0; i<secret_size; i++) {
-        secret_key[i] = master_ext_key[i];
-        chain_key[i]  = master_ext_key[i + secret_size];
-    }
+    memcpy(&secret_key, &master_ext_key, secret_size);
+    memcpy(&chain_key, &(master_ext_key[secret_size]), secret_size);
     
     // Output secret key
     std::cout << "Root key:   "; check_output_byte(master_ext_key, 64);
