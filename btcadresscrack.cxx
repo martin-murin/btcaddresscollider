@@ -63,30 +63,30 @@ int main(){
     byte root_salt[] = "Bitcoin seed";
     size_t root_slen = strlen((const char*)root_salt);
 
-    byte master_ext_key[SHA512::DIGESTSIZE];
+    byte masterPrivKey[SHA512::DIGESTSIZE];
     HMAC< SHA512 > hmac(root_salt, sizeof(root_salt));
     ArraySource arrsrc1(derived_seed, sizeof(derived_seed), true,
         new HashFilter(hmac,
-            new ArraySink(master_ext_key, SHA512::DIGESTSIZE)
+            new ArraySink(masterPrivKey, SHA512::DIGESTSIZE)
         )
     );
     
     // Output master extended key
-    std::string master_ext_key_str;
-    byteToStr(master_ext_key, sizeof(master_ext_key), master_ext_key_str);
-    std::cout << "Master Extended Key (Root Key): " << master_ext_key_str << std::endl;
-
+    std::string masterPrivKey_str;
+    byteToStr(masterPrivKey, sizeof(masterPrivKey), masterPrivKey_str);
+    std::cout << "Master Extended Key (Root Key): " << masterPrivKey_str << std::endl;
+    
 
     // Split root key into secret and chain parts
-    int secret_size = sizeof(master_ext_key) / 2;
+    int secret_size = sizeof(masterPrivKey) / 2;
     byte secret_key[secret_size];
     byte chain_key[secret_size];
 
-    memcpy(&secret_key, &master_ext_key, secret_size);
-    memcpy(&chain_key, &(master_ext_key[secret_size]), secret_size);
+    memcpy(&secret_key, &masterPrivKey, secret_size);
+    memcpy(&chain_key, &(masterPrivKey[secret_size]), secret_size);
     
     // Output secret key
-    std::cout << "Root key:   "; check_output_byte(master_ext_key, 64);
+    std::cout << "Root key:   "; check_output_byte(masterPrivKey, 64);
     std::cout << "Secret key: "; check_output_byte(secret_key, 32);
     std::cout << "Chain key:  "; check_output_byte(chain_key, 32);
 
@@ -136,9 +136,41 @@ int main(){
     byteToStr(compressedPubKey, sizeof(compressedPubKey), compressedPubKey_str);
     std::cout << "Compressed Public Key: " << compressedPubKey_str << std::endl;
 
+
+    // Serialized master keys
+    //byte versionPrefixPriv[] {0x0488ADE4};  //xprv in BIP32 
+    //byte versionPrefixPub[] {0x0488B21E};   //xpub in BIP32
+    byte depth[] {0x00};                    //0x00 for master, 0x01 for level-1 derived...
+    byte zero[] {0x00};
+    byte fingerprint[] {0x00000000};
+    byte childnumber[] {0x00000000};
+    byte fullPrefixPriv[] {0x04, 0x88, 0xAD, 0xE4, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+    byte fullPrefixPub[] {0x04, 0x88, 0xB2, 0x1E, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+    
+    byte serializedMasterPrivKey[78];
+    memcpy(&serializedMasterPrivKey, &fullPrefixPriv, sizeof(fullPrefixPriv));
+    memcpy(&(serializedMasterPrivKey[sizeof(fullPrefixPriv)]), &chain_key, sizeof(chain_key));
+    memcpy(&(serializedMasterPrivKey[sizeof(fullPrefixPriv)+sizeof(chain_key)]), &zero, 1);
+    memcpy(&(serializedMasterPrivKey[sizeof(fullPrefixPriv)+sizeof(chain_key)+1]), secret_key, sizeof(secret_key));
+
+    SHA256 hashSHA256;
+    byte checksum[SHA256::DIGESTSIZE];
+    ArraySource arrsrc3(serializedMasterPrivKey, sizeof(serializedMasterPrivKey), true,
+        new HashFilter(hashSHA256,
+            new HashFilter(hashSHA256,
+                new ArraySink(checksum, SHA256::DIGESTSIZE)
+            )
+        )
+    );
+    byte serializedMasterPrivKeyCheck[82];
+    memcpy(&serializedMasterPrivKeyCheck, &serializedMasterPrivKey, 78);
+    memcpy(&(serializedMasterPrivKeyCheck[78]), &checksum, 4);
+    std::string serializedMasterPrivKeyCheck_str;
+    byteToStr(serializedMasterPrivKeyCheck, sizeof(serializedMasterPrivKeyCheck), serializedMasterPrivKeyCheck_str);
+    std::cout << "Serialized Master Private Key: " << serializedMasterPrivKeyCheck_str << std::endl;
+
     // Pay-To-Witness-Public-Key-Hash Address (native segwit)
     // ripemd160(sha256(compressedPubKey))
-    SHA256 hashSHA256;
     RIPEMD160 hashRIPEMD160;
 
     byte hashedPubKey[RIPEMD160::DIGESTSIZE];
