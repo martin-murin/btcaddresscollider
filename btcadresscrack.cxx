@@ -1,5 +1,6 @@
 #include "wordlist.h"
 #include "segwit_addr.h"
+#include "base58.h"
 #include "cryptopp/eccrypto.h"
 #include "cryptopp/osrng.h"
 #include "cryptopp/oids.h"
@@ -166,6 +167,10 @@ int main(){
     std::string serializedMasterPrivKeyCheck_str;
     byteToStr(serializedMasterPrivKeyCheck, sizeof(serializedMasterPrivKeyCheck), serializedMasterPrivKeyCheck_str);
     std::cout << "Serialized Master Private Key: " << serializedMasterPrivKeyCheck_str << std::endl;
+    
+    std::vector<uint8_t> serializedMasterPrivKeyCheck_uint8(&serializedMasterPrivKeyCheck[0], &serializedMasterPrivKeyCheck[sizeof(serializedMasterPrivKeyCheck)]);
+    std::string serializedMasterPrivKeyCheck_str_b58 = EncodeBase58(serializedMasterPrivKeyCheck_uint8, base58map);
+    std::cout << "Serialized Master Private Key (base58): " << serializedMasterPrivKeyCheck_str_b58 << std::endl;
 
     // Serialise public key
     byte serializedMasterPubKey[78];
@@ -186,6 +191,10 @@ int main(){
     std::string serializedMasterPubKeyCheck_str;
     byteToStr(serializedMasterPubKeyCheck, sizeof(serializedMasterPubKeyCheck), serializedMasterPubKeyCheck_str);
     std::cout << "Serialized Master Public Key: " << serializedMasterPubKeyCheck_str << std::endl;
+
+    std::vector<uint8_t> serializedMasterPubKeyCheck_uint8(&serializedMasterPubKeyCheck[0], &serializedMasterPubKeyCheck[sizeof(serializedMasterPubKeyCheck)]);
+    std::string serializedMasterPubKeyCheck_str_b58 = EncodeBase58(serializedMasterPubKeyCheck_uint8, base58map);
+    std::cout << "Serialized Master Pubate Key (base58): " << serializedMasterPubKeyCheck_str_b58 << std::endl;
 
     // Pay-To-Witness-Public-Key-Hash Address (native segwit)
     // ripemd160(sha256(compressedPubKey))
