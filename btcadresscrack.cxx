@@ -24,7 +24,7 @@ void byteToStr(const byte inputByteArr[], int size, std::string & outputStr){
     );
 }
 
-void strToByte(const std::string inputStr, byte (& outputByteArr)[], int size){
+template <unsigned int SIZE> void strToByte(const std::string inputStr, byte (& outputByteArr)[SIZE], int size){
     StringSource strsrc(inputStr, true,
         new HexDecoder(
             new ArraySink(outputByteArr, size)
@@ -75,7 +75,6 @@ int main(){
     std::string masterPrivKey_str;
     byteToStr(masterPrivKey, sizeof(masterPrivKey), masterPrivKey_str);
     std::cout << "Master Extended Key (Root Key): " << masterPrivKey_str << std::endl;
-    
 
     // Split root key into secret and chain parts
     int secret_size = sizeof(masterPrivKey) / 2;
@@ -84,7 +83,7 @@ int main(){
 
     memcpy(&secret_key, &masterPrivKey, secret_size);
     memcpy(&chain_key, &(masterPrivKey[secret_size]), secret_size);
-    
+
     // Output secret key
     std::cout << "Root key:   "; check_output_byte(masterPrivKey, 64);
     std::cout << "Secret key: "; check_output_byte(secret_key, 32);
@@ -146,7 +145,6 @@ int main(){
     byte childnumber[] {0x00000000};
     byte fullPrefixPriv[] {0x04, 0x88, 0xAD, 0xE4, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
     byte fullPrefixPub[] {0x04, 0x88, 0xB2, 0x1E, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-    
     byte serializedMasterPrivKey[78];
     memcpy(&serializedMasterPrivKey, &fullPrefixPriv, sizeof(fullPrefixPriv));
     memcpy(&(serializedMasterPrivKey[sizeof(fullPrefixPriv)]), &chain_key, sizeof(chain_key));
@@ -168,6 +166,26 @@ int main(){
     std::string serializedMasterPrivKeyCheck_str;
     byteToStr(serializedMasterPrivKeyCheck, sizeof(serializedMasterPrivKeyCheck), serializedMasterPrivKeyCheck_str);
     std::cout << "Serialized Master Private Key: " << serializedMasterPrivKeyCheck_str << std::endl;
+
+    // Serialise public key
+    byte serializedMasterPubKey[78];
+    memcpy(&serializedMasterPubKey, &fullPrefixPub, sizeof(fullPrefixPub));
+    memcpy(&(serializedMasterPubKey[sizeof(fullPrefixPub)]), &chain_key, sizeof(chain_key));
+    memcpy(&(serializedMasterPubKey[sizeof(fullPrefixPub) + sizeof(chain_key)]), compressedPubKey, sizeof(compressedPubKey));
+
+    ArraySource arrsrc4(serializedMasterPubKey, sizeof(serializedMasterPubKey), true,
+        new HashFilter(hashSHA256,
+            new HashFilter(hashSHA256,
+                new ArraySink(checksum, SHA256::DIGESTSIZE)
+            )
+        )
+    );
+    byte serializedMasterPubKeyCheck[82];
+    memcpy(&serializedMasterPubKeyCheck, &serializedMasterPubKey, 78);
+    memcpy(&(serializedMasterPubKeyCheck[78]), &checksum, 4);
+    std::string serializedMasterPubKeyCheck_str;
+    byteToStr(serializedMasterPubKeyCheck, sizeof(serializedMasterPubKeyCheck), serializedMasterPubKeyCheck_str);
+    std::cout << "Serialized Master Public Key: " << serializedMasterPubKeyCheck_str << std::endl;
 
     // Pay-To-Witness-Public-Key-Hash Address (native segwit)
     // ripemd160(sha256(compressedPubKey))
