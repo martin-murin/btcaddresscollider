@@ -39,6 +39,86 @@ void check_output_byte(const byte arr[], int size){
     std::cout << root_str << std::endl;
 }
 
+void deriveHardChildPrivKey(const byte (& masterPrivKey)[32], const byte (& masterChainCode)[32], unsigned int index, byte (& childPrivKey)[32], byte (& childChainCode)[32]){
+    std::cout << "check parent priv key: " << Integer(masterPrivKey, 32) << std::endl;
+    byte hashinput[1+sizeof(masterPrivKey)+sizeof(unsigned int)];
+    byte hashresult[SHA512::DIGESTSIZE];
+    byte index_byte[sizeof(unsigned int)];
+    memcpy(index_byte, &index, sizeof(unsigned int));
+    std::reverse(index_byte, index_byte+sizeof(unsigned int));
+    hashinput[0] = 0x00;
+    memcpy(&(hashinput[1]), &masterPrivKey, sizeof(masterPrivKey));
+    memcpy(&(hashinput[1+sizeof(masterPrivKey)]), &index_byte, sizeof(unsigned int));
+    std::cout << "hash input: "; check_output_byte(hashinput, sizeof(hashinput));
+    HMAC< SHA512 > hmacSHA512(masterChainCode, sizeof(masterChainCode));
+    ArraySource arrsrc(hashinput, sizeof(hashinput), true,
+        new HashFilter(hmacSHA512, 
+            new ArraySink(hashresult, SHA512::DIGESTSIZE)
+        )
+    );
+    std::cout << "hash result: " << Integer(hashresult, 32) << std::endl;
+    std::cout << "master priv key: " << Integer(masterPrivKey, 32) << std::endl;
+    std::cout << "sum of the two: " << (Integer(hashresult, 32) + Integer(masterPrivKey, 32)) << std::endl;
+    std::cout << "Order of the curve: " << Integer("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141h") << "\n";
+    Integer childPrivKey_int((Integer(hashresult, 32) + Integer(masterPrivKey, 32)) % Integer("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141h"));
+    std::cout << "modulo " << childPrivKey_int << std::endl; 
+    childPrivKey_int.Encode(childPrivKey, 32);
+    memcpy(&childChainCode, &(hashresult[32]), 32);
+}
+
+void deriveSoftChildPrivKey(const byte (& masterPrivKey)[32], const byte (& masterPubKey)[33], const byte (& masterChainCode)[32], unsigned int index, byte (& childPrivKey)[32], byte (& childChainCode)[32]){
+    byte hashinput[1+sizeof(masterPubKey)+sizeof(unsigned int)];
+    byte hashresult[SHA512::DIGESTSIZE];
+    byte index_byte[sizeof(unsigned int)];
+
+    memcpy(index_byte, &index, sizeof(unsigned int));
+    std::reverse(index_byte, index_byte+sizeof(unsigned int));
+
+    memcpy(&hashinput, &masterPubKey, sizeof(masterPrivKey));
+    memcpy(&(hashinput[sizeof(masterPubKey)]), &index_byte, sizeof(unsigned int));
+    
+    HMAC< SHA512 > hmacSHA512(masterChainCode, sizeof(masterChainCode));
+    ArraySource arrsrc(hashinput, sizeof(hashinput), true,
+        new HashFilter(hmacSHA512, 
+            new ArraySink(hashresult, SHA512::DIGESTSIZE)
+        )
+    );
+    Integer childPrivKey_int((Integer(hashresult, 32) + Integer(masterPrivKey, 32)) % Integer("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141h"));
+    childPrivKey_int.Encode(childPrivKey, 32);
+    memcpy(&childChainCode, &(hashresult[32]), 32);
+}
+
+void generatePubKeyFromPrivKey(const byte (& privKey)[32], byte (& pubKey)[33]){
+    ECDSA<ECP, SHA256>::PrivateKey privateKeyECDSA;
+    privateKeyECDSA.Initialize(ASN1::secp256k1(), Integer(privKey, sizeof(privKey)));
+
+    ECDSA<ECP, SHA256>::PublicKey publicKeyECDSA;
+    privateKeyECDSA.MakePublicKey(publicKeyECDSA);
+    publicKeyECDSA.AccessGroupParameters().SetPointCompression(true);
+
+    // Public key compression
+    byte pubKeyElementX[32];
+    byte pubKeyElementY[32];
+    publicKeyECDSA.GetPublicElement().x.Encode(pubKeyElementX, sizeof(pubKeyElementX));
+    publicKeyECDSA.GetPublicElement().y.Encode(pubKeyElementY, sizeof(pubKeyElementY));
+
+    if(publicKeyECDSA.GetPublicElement().y.IsEven()){
+        pubKey[0] = 0x02;
+    }
+    else{
+        pubKey[0] = 0x03;
+    }
+    memcpy(&(pubKey[1]), &pubKeyElementX, 32);
+}
+
+std::string serializeKey(){
+
+}
+
+std::string getAddressP2WPKH(){
+
+}
+
 int main(){
 
     // test private key from mnemonic
@@ -79,8 +159,8 @@ int main(){
 
     // Split root key into secret and chain parts
     int secret_size = sizeof(masterPrivKey) / 2;
-    byte secret_key[secret_size];
-    byte chain_key[secret_size];
+    byte secret_key[32];
+    byte chain_key[32];
 
     memcpy(&secret_key, &masterPrivKey, secret_size);
     memcpy(&chain_key, &(masterPrivKey[secret_size]), secret_size);
@@ -101,8 +181,8 @@ int main(){
     decoder.Put((byte*) &secret_str[0], secret_str.size());
     decoder.MessageEnd();
 
-    Integer x;    // Private exponent
-    x.Decode(decoder, decoder.MaxRetrievable());
+    Integer x(secret_key, 32);    // Private exponent
+    //x.Decode(decoder, decoder.MaxRetrievable());
     privKey.Initialize(ASN1::secp256k1(), x);
 
     // Generate public key from private key
@@ -119,16 +199,13 @@ int main(){
     pubKey.GetPublicElement().x.Encode(pubKeyElementX, sizeof(pubKeyElementX));
     pubKey.GetPublicElement().y.Encode(pubKeyElementY, sizeof(pubKeyElementY));
 
-    byte prefix;
+    byte compressedPubKey[33];
     if(pubKey.GetPublicElement().y.IsEven()){
-        prefix = 0x02;
+        compressedPubKey[0] = 0x02;
     }
     else{
-        prefix = 0x03;
+        compressedPubKey[0] = 0x03;
     }
-
-    byte compressedPubKey[33];
-    memcpy(&compressedPubKey, &prefix, 1);
     memcpy(&(compressedPubKey[1]), &pubKeyElementX, 32);
 
     // Output compressed public key
@@ -218,5 +295,56 @@ int main(){
     std::vector<uint8_t> witprog(&hashedPubKey[0], &hashedPubKey[RIPEMD160::DIGESTSIZE]);
     std::string address_p2wpkh = segwit_addr::encode(hrp, witver, witprog); 
     std::cout << "Address: " << address_p2wpkh << std::endl;
+
+    // Test derive hard child key
+    std::string parent_chain_code  = "463223aac10fb13f291a1bc76bc26003d98da661cb76df61e750c139826dea8b";
+    std::string parent_private_key = "f79bb0d317b310b261a55a8ab393b4c8a1aba6fa4d08aef379caba502d5d67f9";
+    byte parent_chain_code_byte[32];
+    byte parent_private_key_byte[32];
+    strToByte(parent_chain_code, parent_chain_code_byte, 32);
+    strToByte(parent_private_key, parent_private_key_byte, 32);
+    unsigned int index = 2147483648;
+    byte hard_child_priv_key[32];
+    byte hard_child_chain_code[32];
+    deriveHardChildPrivKey(parent_private_key_byte, parent_chain_code_byte, index, hard_child_priv_key, hard_child_chain_code);
+    std::cout << "hardened child priv key: "; check_output_byte(hard_child_priv_key, 32);
+    std::cout << "hardened child chain code: "; check_output_byte(hard_child_chain_code, 32);
+
+    // BIP 84 derivation path m/84'/0'/0'/0/0
+    byte child_84_privKey[32];
+    byte child_84_pubKey[33];
+    byte child_84_chainCode[32];
+    byte child_84_0h_privKey[32];
+    byte child_84_0h_pubKey[33];
+    byte child_84_0h_chainCode[32];
+    byte child_84_0h_0h_privKey[32];
+    byte child_84_0h_0h_pubKey[33];
+    byte child_84_0h_0h_chainCode[32];
+    byte child_84_0h_0h_0_privKey[32];
+    byte child_84_0h_0h_0_pubKey[33];
+    byte child_84_0h_0h_0_chainCode[32];
+    byte child_84_0h_0h_0_0_privKey[32];
+    byte child_84_0h_0h_0_0_pubKey[33];
+    byte child_84_0h_0h_0_0_chainCode[32];
+    
+    unsigned int index_hard = 2147483648;
+    
+    deriveHardChildPrivKey(secret_key, chain_key, index_hard+84, child_84_privKey, child_84_chainCode);
+    generatePubKeyFromPrivKey(child_84_privKey, child_84_pubKey);
+    
+    deriveHardChildPrivKey(child_84_privKey, child_84_chainCode, index_hard, child_84_0h_privKey, child_84_0h_chainCode);
+    generatePubKeyFromPrivKey(child_84_0h_privKey, child_84_0h_pubKey);
+    
+    deriveHardChildPrivKey(child_84_0h_privKey, child_84_0h_chainCode, index_hard, child_84_0h_0h_privKey, child_84_0h_0h_chainCode);
+    generatePubKeyFromPrivKey(child_84_0h_0h_privKey, child_84_0h_0h_pubKey);
+
+    deriveSoftChildPrivKey(child_84_0h_0h_privKey, child_84_0h_0h_pubKey, child_84_0h_0h_chainCode, index_hard, child_84_0h_0h_0_privKey, child_84_0h_0h_0_chainCode);
+    generatePubKeyFromPrivKey(child_84_0h_0h_0_privKey, child_84_0h_0h_0_pubKey);
+
+    deriveSoftChildPrivKey(child_84_0h_0h_0_privKey, child_84_0h_0h_0_pubKey, child_84_0h_0h_0_chainCode, index_hard, child_84_0h_0h_0_0_privKey, child_84_0h_0h_0_0_chainCode);
+    generatePubKeyFromPrivKey(child_84_0h_0h_0_0_privKey, child_84_0h_0h_0_0_pubKey);
+
+    std::cout << "\n======= DERIVATION TREE FOR BIP 84 ========\n";
+
     return 0;
 }
