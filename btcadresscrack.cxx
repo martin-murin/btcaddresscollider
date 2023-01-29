@@ -162,11 +162,11 @@ void serializationPrefix(char* version, byte depth, const byte (& parentPublicKe
     // Version bytes of the key ("zprv" and "zpub" in BIP 84 derivation path)
     byte ver[4];
     if(strcmp(version, "zprv") == 0){ver[0] = 0x04; ver[1] = 0xb2; ver[2] = 0x43; ver[3] = 0x0c;}
-    else if(strcmp(version, "zpub")){ver[0] = 0x04; ver[1] = 0xb2; ver[2] = 0x47; ver[3] = 0x46;}
-    else if(strcmp(version, "yprv")){ver[0] = 0x04; ver[1] = 0x9d; ver[2] = 0x78; ver[3] = 0x78;}
-    else if(strcmp(version, "ypub")){ver[0] = 0x04; ver[1] = 0x9d; ver[2] = 0x7c; ver[3] = 0xb2;}
-    else if(strcmp(version, "xprv")){ver[0] = 0x04; ver[1] = 0x88; ver[2] = 0xad; ver[3] = 0xe4;}
-    else if(strcmp(version, "xpub")){ver[0] = 0x04; ver[1] = 0x88; ver[2] = 0xb2; ver[3] = 0x1e;}
+    else if(strcmp(version, "zpub") == 0){ver[0] = 0x04; ver[1] = 0xb2; ver[2] = 0x47; ver[3] = 0x46;}
+    else if(strcmp(version, "yprv") == 0){ver[0] = 0x04; ver[1] = 0x9d; ver[2] = 0x78; ver[3] = 0x78;}
+    else if(strcmp(version, "ypub") == 0){ver[0] = 0x04; ver[1] = 0x9d; ver[2] = 0x7c; ver[3] = 0xb2;}
+    else if(strcmp(version, "xprv") == 0){ver[0] = 0x04; ver[1] = 0x88; ver[2] = 0xad; ver[3] = 0xe4;}
+    else if(strcmp(version, "xpub") == 0){ver[0] = 0x04; ver[1] = 0x88; ver[2] = 0xb2; ver[3] = 0x1e;}
     else{ver[0] = 0x00; ver[1] = 0x00; ver[2] = 0x00; ver[3] = 0x00;}
     
     // Convert child number into byte array
