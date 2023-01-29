@@ -111,11 +111,86 @@ void generatePubKeyFromPrivKey(const byte (& privKey)[32], byte (& pubKey)[33]){
     memcpy(&(pubKey[1]), &pubKeyElementX, 32);
 }
 
-std::string serializeKey(){
+void hash160(const byte (& publicKey)[33], byte (& hashedPubKey)[RIPEMD160::DIGESTSIZE]){
+    // ripemd160(sha256(publicKey))
+    SHA256 hashSHA256;
+    RIPEMD160 hashRIPEMD160;
 
+    ArraySource arrsrc(publicKey, sizeof(publicKey), true,
+        new HashFilter(hashSHA256,
+            new HashFilter(hashRIPEMD160,
+                new ArraySink(hashedPubKey, RIPEMD160::DIGESTSIZE)
+            )
+        )
+    );
 }
 
-std::string getAddressP2WPKH(){
+void serializationPrefix(char* version, byte depth, const byte (& parentPublicKey)[33], unsigned int childNumber, byte (& serialPrefix)[13]){
+    // Version bytes of the key ("zprv" and "zpub" in BIP 84 derivation path)
+    byte ver[4];
+    if(version == "zprv"){ver[0] = 0x04; ver[1] = 0xb2; ver[2] = 0x43; ver[3] = 0x0c;}
+    else if(version == "zpub"){ver[0] = 0x04; ver[1] = 0xb2; ver[2] = 0x47; ver[3] = 0x46;}
+    else if(version == "yprv"){ver[0] = 0x04; ver[1] = 0x9d; ver[2] = 0x78; ver[3] = 0x78;}
+    else if(version == "ypub"){ver[0] = 0x04; ver[1] = 0x9d; ver[2] = 0x7c; ver[3] = 0xb2;}
+    else if(version == "xprv"){ver[0] = 0x04; ver[1] = 0x88; ver[2] = 0xad; ver[3] = 0xe4;}
+    else if(version == "xpub"){ver[0] = 0x04; ver[1] = 0x88; ver[2] = 0xb2; ver[3] = 0x1e;}
+    else{ver[0] = 0x00; ver[1] = 0x00; ver[2] = 0x00; ver[3] = 0x00;}
+    
+    // Convert child number into byte array
+    byte childN[sizeof(unsigned int)];
+    memcpy(childN, &childNumber, sizeof(unsigned int));
+    std::reverse(childN, childN+sizeof(unsigned int));
+
+    // Parent fingerprint is HASH160 of the public key
+    byte parentFingerprint[RIPEMD160::DIGESTSIZE];
+    hash160(parentPublicKey, parentFingerprint);
+
+    // Write serialization prefix
+    memcpy(&serialPrefix, &ver, 4);
+    serialPrefix[4] = depth;
+    memcpy(&(serialPrefix[5]), parentFingerprint, 4);
+    memcpy(&(serialPrefix[9]), childN, sizeof(unsigned int));
+}
+
+template <unsigned int KEYSIZE> void serializeKey(const byte (& prefix)[13], const byte (& key)[KEYSIZE], const byte (& chain)[32], byte (& serializedKey)[82], std::string & serializedKey_str){
+    // Prepare byte sequence for SHA256 hash
+    byte tempSequence[78];
+    memcpy(&tempSequence, &prefix, sizeof(prefix));
+    memcpy(&(tempSequence[sizeof(prefix)]), &chain, sizeof(chain));
+    tempSequence[sizeof(prefix)+sizeof(chain)] = 0x00;
+    memcpy(&(tempSequence[sizeof(tempSequence)-sizeof(key)]), key, sizeof(key));
+
+    // Obtain checksum using SHA256
+    SHA256 hashSHA256;
+    byte checksum[SHA256::DIGESTSIZE];
+    ArraySource arrsrc(tempSequence, sizeof(tempSequence), true,
+        new HashFilter(hashSHA256,
+            new HashFilter(hashSHA256,
+                new ArraySink(checksum, SHA256::DIGESTSIZE)
+            )
+        )
+    );
+
+    // Write serialized key and checksum 
+    memcpy(&serializedKey, &tempSequence, 78);
+    memcpy(&(serializedKey[78]), &checksum, 4);
+    
+    // Convert to base58
+    std::vector<uint8_t> serializedKey_uint8(&serializedKey[0], &serializedKey[sizeof(serializedKey)]);
+    serializedKey_str = EncodeBase58(serializedKey_uint8, base58map);
+}
+
+std::string getAddressP2WPKH(const byte (& publicKey)[33]){
+    // Pay-To-Witness-Public-Key-Hash Address (native segwit)
+    byte hashedPubKey[RIPEMD160::DIGESTSIZE];
+    hash160(publicKey, hashedPubKey);
+
+    // Encode with BECH32
+    std::string hrp = "bc";         // human readable part
+    int witver = 0;                 // witness version
+    std::vector<uint8_t> witprog(&hashedPubKey[0], &hashedPubKey[RIPEMD160::DIGESTSIZE]);
+    std::string address_p2wpkh = segwit_addr::encode(hrp, witver, witprog);
+    return address_p2wpkh;
 
 }
 
@@ -221,8 +296,8 @@ int main(){
     byte zero[] {0x00};
     byte fingerprint[] {0x00000000};
     byte childnumber[] {0x00000000};
-    byte fullPrefixPriv[] {0x04, 0x88, 0xAD, 0xE4, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-    byte fullPrefixPub[] {0x04, 0x88, 0xB2, 0x1E, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+    byte fullPrefixPriv[] {0x04, 0xb2, 0x43, 0x0c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+    byte fullPrefixPub[] {0x04, 0xb2, 0x47, 0x46, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
     byte serializedMasterPrivKey[78];
     memcpy(&serializedMasterPrivKey, &fullPrefixPriv, sizeof(fullPrefixPriv));
     memcpy(&(serializedMasterPrivKey[sizeof(fullPrefixPriv)]), &chain_key, sizeof(chain_key));
@@ -314,37 +389,95 @@ int main(){
     byte child_84_privKey[32];
     byte child_84_pubKey[33];
     byte child_84_chainCode[32];
+    byte child_84_privPrefix[13];
+    byte child_84_pubPrefix[13];
     byte child_84_0h_privKey[32];
     byte child_84_0h_pubKey[33];
     byte child_84_0h_chainCode[32];
+    byte child_84_0h_privPrefix[13];
+    byte child_84_0h_pubPrefix[13];
     byte child_84_0h_0h_privKey[32];
     byte child_84_0h_0h_pubKey[33];
     byte child_84_0h_0h_chainCode[32];
+    byte child_84_0h_0h_privPrefix[13];
+    byte child_84_0h_0h_pubPrefix[13];
     byte child_84_0h_0h_0_privKey[32];
     byte child_84_0h_0h_0_pubKey[33];
     byte child_84_0h_0h_0_chainCode[32];
+    byte child_84_0h_0h_0_privPrefix[13];
+    byte child_84_0h_0h_0_pubPrefix[13];
     byte child_84_0h_0h_0_0_privKey[32];
     byte child_84_0h_0h_0_0_pubKey[33];
     byte child_84_0h_0h_0_0_chainCode[32];
+    byte child_84_0h_0h_0_0_privPrefix[13];
+    byte child_84_0h_0h_0_0_pubPrefix[13];
     
     unsigned int index_hard = 2147483648;
     
+    //void serializationPrefix(char* version, byte depth, const byte (& parentPublicKey)[33], unsigned int childNumber, byte (& serialPrefix)[13]){
     deriveHardChildPrivKey(secret_key, chain_key, index_hard+84, child_84_privKey, child_84_chainCode);
     generatePubKeyFromPrivKey(child_84_privKey, child_84_pubKey);
+    serializationPrefix(const_cast<char*>("zprv"), 0x01, compressedPubKey, index_hard+84, child_84_privPrefix);
+    serializationPrefix(const_cast<char*>("zpub"), 0x01, compressedPubKey, index_hard+84, child_84_pubPrefix);
     
     deriveHardChildPrivKey(child_84_privKey, child_84_chainCode, index_hard, child_84_0h_privKey, child_84_0h_chainCode);
     generatePubKeyFromPrivKey(child_84_0h_privKey, child_84_0h_pubKey);
+    serializationPrefix(const_cast<char*>("zprv"), 0x02, child_84_pubKey, index_hard, child_84_0h_privPrefix);
+    serializationPrefix(const_cast<char*>("zpub"), 0x02, child_84_pubKey, index_hard, child_84_0h_pubPrefix);
     
     deriveHardChildPrivKey(child_84_0h_privKey, child_84_0h_chainCode, index_hard, child_84_0h_0h_privKey, child_84_0h_0h_chainCode);
     generatePubKeyFromPrivKey(child_84_0h_0h_privKey, child_84_0h_0h_pubKey);
+    serializationPrefix(const_cast<char*>("zprv"), 0x03, child_84_0h_pubKey, index_hard, child_84_0h_0h_privPrefix);
+    serializationPrefix(const_cast<char*>("zpub"), 0x03, child_84_0h_pubKey, index_hard, child_84_0h_0h_pubPrefix);
 
-    deriveSoftChildPrivKey(child_84_0h_0h_privKey, child_84_0h_0h_pubKey, child_84_0h_0h_chainCode, index_hard, child_84_0h_0h_0_privKey, child_84_0h_0h_0_chainCode);
+    deriveSoftChildPrivKey(child_84_0h_0h_privKey, child_84_0h_0h_pubKey, child_84_0h_0h_chainCode, 0, child_84_0h_0h_0_privKey, child_84_0h_0h_0_chainCode);
     generatePubKeyFromPrivKey(child_84_0h_0h_0_privKey, child_84_0h_0h_0_pubKey);
+    serializationPrefix(const_cast<char*>("zprv"), 0x04, child_84_0h_0h_pubKey, 0, child_84_0h_0h_0_privPrefix);
+    serializationPrefix(const_cast<char*>("zpub"), 0x04, child_84_0h_0h_pubKey, 0, child_84_0h_0h_0_pubPrefix);
 
-    deriveSoftChildPrivKey(child_84_0h_0h_0_privKey, child_84_0h_0h_0_pubKey, child_84_0h_0h_0_chainCode, index_hard, child_84_0h_0h_0_0_privKey, child_84_0h_0h_0_0_chainCode);
+    deriveSoftChildPrivKey(child_84_0h_0h_0_privKey, child_84_0h_0h_0_pubKey, child_84_0h_0h_0_chainCode, 0, child_84_0h_0h_0_0_privKey, child_84_0h_0h_0_0_chainCode);
     generatePubKeyFromPrivKey(child_84_0h_0h_0_0_privKey, child_84_0h_0h_0_0_pubKey);
+    serializationPrefix(const_cast<char*>("zprv"), 0x05, child_84_0h_0h_0_pubKey, 0, child_84_0h_0h_0_0_privPrefix);
+    serializationPrefix(const_cast<char*>("zpub"), 0x05, child_84_0h_0h_0_pubKey, 0, child_84_0h_0h_0_0_pubPrefix);
+
+    //template <unsigned int KEYSIZE> void serializeKey(const byte (& prefix)[13], const byte (& key)[KEYSIZE], const byte (& chain)[32], byte (& serializedKey)[82], std::string & serializedKey_str)
+    //std::string getAddressP2WPKH(const byte (& publicKey)[33]){
+    byte child_84_privKey_serialized[82];
+    byte child_84_pubKey_serialized[82];
+    std::string child_84_privKey_serialized_str;
+    std::string child_84_pubKey_serialized_str;
+    serializeKey(child_84_privPrefix, child_84_privKey, child_84_chainCode, child_84_privKey_serialized, child_84_privKey_serialized_str);
+    serializeKey(child_84_pubPrefix, child_84_pubKey, child_84_chainCode, child_84_pubKey_serialized, child_84_pubKey_serialized_str);
+    std::string child_84_pubKey_addressP2WPKH = getAddressP2WPKH(child_84_pubKey);
+
+    byte child_84_0h_0h_0_privKey_serialized[82];
+    byte child_84_0h_0h_0_pubKey_serialized[82];
+    std::string child_84_0h_0h_0_privKey_serialized_str;
+    std::string child_84_0h_0h_0_pubKey_serialized_str;
+    serializeKey(child_84_0h_0h_0_privPrefix, child_84_0h_0h_0_privKey, child_84_0h_0h_0_chainCode, child_84_0h_0h_0_privKey_serialized, child_84_0h_0h_0_privKey_serialized_str);
+    serializeKey(child_84_0h_0h_0_pubPrefix, child_84_0h_0h_0_pubKey, child_84_0h_0h_0_chainCode, child_84_0h_0h_0_pubKey_serialized, child_84_0h_0h_0_pubKey_serialized_str);
+    std::string child_84_0h_0h_0_pubKey_addressP2WPKH = getAddressP2WPKH(child_84_0h_0h_0_pubKey);
+    
+    byte child_84_0h_0h_0_0_privKey_serialized[82];
+    byte child_84_0h_0h_0_0_pubKey_serialized[82];
+    std::string child_84_0h_0h_0_0_privKey_serialized_str;
+    std::string child_84_0h_0h_0_0_pubKey_serialized_str;
+    serializeKey(child_84_0h_0h_0_0_privPrefix, child_84_0h_0h_0_0_privKey, child_84_0h_0h_0_0_chainCode, child_84_0h_0h_0_0_privKey_serialized, child_84_0h_0h_0_0_privKey_serialized_str);
+    serializeKey(child_84_0h_0h_0_0_pubPrefix, child_84_0h_0h_0_0_pubKey, child_84_0h_0h_0_0_chainCode, child_84_0h_0h_0_0_pubKey_serialized, child_84_0h_0h_0_0_pubKey_serialized_str);
+    std::string child_84_0h_0h_0_0_pubKey_addressP2WPKH = getAddressP2WPKH(child_84_0h_0h_0_0_pubKey);
 
     std::cout << "\n======= DERIVATION TREE FOR BIP 84 ========\n";
+    std::cout << "child_84_privKey_serialized:             " << child_84_privKey_serialized_str << std::endl;
+    std::cout << "child_84_pubKey_serialized:              " << child_84_pubKey_serialized_str << std::endl;
+    std::cout << "child_84_pubKey_addressP2WPKH:           " << child_84_pubKey_addressP2WPKH << std::endl;
+    std::cout << std::endl;
+    std::cout << "child_84_0h_0h_0_privKey_serialized:     " << child_84_0h_0h_0_privKey_serialized_str << std::endl;
+    std::cout << "child_84_0h_0h_0_pubKey_serialized:      " << child_84_0h_0h_0_pubKey_serialized_str << std::endl;
+    std::cout << "child_84_0h_0h_0_pubKey_addressP2WPKH    " << child_84_0h_0h_0_pubKey_addressP2WPKH << std::endl;
+    std::cout << std::endl;
+    std::cout << "child_84_0h_0h_0_0_privKey_serialized:   " << child_84_0h_0h_0_0_privKey_serialized_str << std::endl;
+    std::cout << "child_84_0h_0h_0_0_pubKey_serialized:    " << child_84_0h_0h_0_0_pubKey_serialized_str << std::endl;
+    std::cout << "child_84_0h_0h_0_0_pubKey_addressP2WPKH  " << child_84_0h_0h_0_0_pubKey_addressP2WPKH << std::endl;
 
     return 0;
 }
