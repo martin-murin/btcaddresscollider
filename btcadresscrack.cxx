@@ -452,14 +452,16 @@ int main(){
 
     // Print
     std::cout << "======== MASTER KEY ========" << std::endl;
-    std::cout << "Mnemonic sentence:    " << byteToStr(mnemonicSentence) << std::endl;
-    std::cout << "Mnemonic base:        " << byteToStr(mnemBase) << "\tsizeof: " << sizeof(mnemBase) << std::endl;
-    std::cout << "Passphrase:           " << byteToStr(mnemPassphrase) << "\tsizeof: " << sizeof(mnemPassphrase)  << std::endl;
-    std::cout << "Mnemonic SALT         " << byteToStr(mnemonicSalt) << std::endl;
-    std::cout << "SEED:                 " << byteToStr(master_seed) << std::endl;
-    std::cout << "MASTER PRIVATE KEY:   " << byteToStr(master_privKey) << std::endl;
-    std::cout << "MASTER PUBLIC KEY:    " << byteToStr(master_pubKey) << std::endl;
-    std::cout << "Master chain code:    " << byteToStr(master_chainCode) << std::endl;
+    std::cout << "Mnemonic sentence (human readable):    " << reinterpret_cast<const char*>(mnemonicSentence) << std::endl;
+    std::cout << "Mnemonic SALT (human readable):        " << reinterpret_cast<const char*>(mnemonicSalt) << std::endl;
+    std::cout << "Mnemonic sentence:                     " << byteToStr(mnemonicSentence) << std::endl;
+    std::cout << "Mnemonic base:                         " << byteToStr(mnemBase) << std::endl;
+    std::cout << "Passphrase:                            " << byteToStr(mnemPassphrase) << std::endl;
+    std::cout << "Mnemonic SALT:                         " << byteToStr(mnemonicSalt) << std::endl;
+    std::cout << "SEED:                                  " << byteToStr(master_seed) << std::endl;
+    std::cout << "MASTER PRIVATE KEY:                    " << byteToStr(master_privKey) << std::endl;
+    std::cout << "MASTER PUBLIC KEY:                     " << byteToStr(master_pubKey) << std::endl;
+    std::cout << "Master chain code:                     " << byteToStr(master_chainCode) << std::endl;
     std::cout << std::endl;
 
 
