@@ -39,6 +39,55 @@ void check_output_byte(const byte arr[], int size){
     std::cout << root_str << std::endl;
 }
 
+template <unsigned int MNEMSIZE, unsigned int SALTSIZE> void deriveSeedFromMnemonic(const byte (& mnemonicSentence)[MNEMSIZE], const byte (& salt)[SALTSIZE], byte (& derivedSeed)[SHA512::DIGESTSIZE]){
+    // Password Based Key Derivation Function
+    PKCS5_PBKDF2_HMAC<SHA512> hashPBKDF2;
+    unsigned int mnem_size = sizeof(mnemonicSentence);
+    unsigned int salt_size = sizeof(salt);
+    unsigned int seed_size = sizeof(derivedSeed);
+    hashPBKDF2.DeriveKey(derivedSeed, seed_size, 0x00, mnemonicSentence, mnem_size, salt, salt_size, 2048, 0.0f);
+}
+
+void deriveMasterKeyFromSeed(const byte (& seed)[SHA512::DIGESTSIZE], byte (& masterPrivKey)[32], byte (& masterChainCode)[32]){
+    byte salt[] = "Bitcoin seed";
+    unsigned int salt_size = sizeof(salt);
+
+    byte hashresult[SHA512::DIGESTSIZE];
+    HMAC< SHA512 > hmacSHA512(salt, salt_size);
+    ArraySource arrsrc(seed, sizeof(seed), true,
+        new HashFilter(hmacSHA512,
+            new ArraySink(hashresult, SHA512::DIGESTSIZE)
+        )
+    );
+
+    // Split hash result into private key (left 32 bytes) and chain code (right 32 bytes)
+    memcpy(&masterPrivKey, &hashresult, 32);
+    memcpy(&masterChainCode, &(hashresult[32]), 32);
+}
+
+void generatePubKeyFromPrivKey(const byte (& privKey)[32], byte (& pubKey)[33]){
+    ECDSA<ECP, SHA256>::PrivateKey privateKeyECDSA;
+    privateKeyECDSA.Initialize(ASN1::secp256k1(), Integer(privKey, sizeof(privKey)));
+
+    ECDSA<ECP, SHA256>::PublicKey publicKeyECDSA;
+    privateKeyECDSA.MakePublicKey(publicKeyECDSA);
+    publicKeyECDSA.AccessGroupParameters().SetPointCompression(true);
+
+    // Public key compression
+    byte pubKeyElementX[32];
+    byte pubKeyElementY[32];
+    publicKeyECDSA.GetPublicElement().x.Encode(pubKeyElementX, sizeof(pubKeyElementX));
+    publicKeyECDSA.GetPublicElement().y.Encode(pubKeyElementY, sizeof(pubKeyElementY));
+
+    if(publicKeyECDSA.GetPublicElement().y.IsEven()){
+        pubKey[0] = 0x02;
+    }
+    else{
+        pubKey[0] = 0x03;
+    }
+    memcpy(&(pubKey[1]), &pubKeyElementX, 32);
+}
+
 void deriveHardChildPrivKey(const byte (& masterPrivKey)[32], const byte (& masterChainCode)[32], unsigned int index, byte (& childPrivKey)[32], byte (& childChainCode)[32]){
     byte hashinput[1+sizeof(masterPrivKey)+sizeof(unsigned int)];
     byte hashresult[SHA512::DIGESTSIZE];
@@ -79,29 +128,6 @@ void deriveSoftChildPrivKey(const byte (& masterPrivKey)[32], const byte (& mast
     Integer childPrivKey_int((Integer(hashresult, 32) + Integer(masterPrivKey, 32)) % Integer("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141h"));
     childPrivKey_int.Encode(childPrivKey, 32);
     memcpy(&childChainCode, &(hashresult[32]), 32);
-}
-
-void generatePubKeyFromPrivKey(const byte (& privKey)[32], byte (& pubKey)[33]){
-    ECDSA<ECP, SHA256>::PrivateKey privateKeyECDSA;
-    privateKeyECDSA.Initialize(ASN1::secp256k1(), Integer(privKey, sizeof(privKey)));
-
-    ECDSA<ECP, SHA256>::PublicKey publicKeyECDSA;
-    privateKeyECDSA.MakePublicKey(publicKeyECDSA);
-    publicKeyECDSA.AccessGroupParameters().SetPointCompression(true);
-
-    // Public key compression
-    byte pubKeyElementX[32];
-    byte pubKeyElementY[32];
-    publicKeyECDSA.GetPublicElement().x.Encode(pubKeyElementX, sizeof(pubKeyElementX));
-    publicKeyECDSA.GetPublicElement().y.Encode(pubKeyElementY, sizeof(pubKeyElementY));
-
-    if(publicKeyECDSA.GetPublicElement().y.IsEven()){
-        pubKey[0] = 0x02;
-    }
-    else{
-        pubKey[0] = 0x03;
-    }
-    memcpy(&(pubKey[1]), &pubKeyElementX, 32);
 }
 
 void hash160(const byte (& publicKey)[33], byte (& hashedPubKey)[RIPEMD160::DIGESTSIZE]){
@@ -186,6 +212,7 @@ std::string getAddressP2WPKH(const byte (& publicKey)[33]){
     return address_p2wpkh;
 
 }
+
 
 int main(){
 
