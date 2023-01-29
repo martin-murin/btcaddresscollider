@@ -17,12 +17,23 @@ using namespace CryptoPP;
 const char* targetHEX = "0x272063C80EBB47CFA3F4CC088187F4B15CE05F7E917BBE7830785B6B16F3CF";
 const char* targetB58 = "bc1q7kw2uepv6hfffhhxx2vplkkpcwsslcw9hsupc6";
 
+
 void byteToStr(const byte inputByteArr[], int size, std::string & outputStr){
     ArraySource strsrc(inputByteArr, size, true,
         new HexEncoder(
             new StringSink(outputStr)
         )
     );
+}
+
+template <unsigned int SIZE> std::string byteToStr(const byte (& inputByteArr)[SIZE]){
+    std::string outputStr;
+    ArraySource strsrc(inputByteArr, sizeof(inputByteArr), true,
+        new HexEncoder(
+            new StringSink(outputStr)
+        )
+    );
+    return outputStr;
 }
 
 template <unsigned int SIZE> void strToByte(const std::string inputStr, byte (& outputByteArr)[SIZE], int size){
@@ -40,11 +51,13 @@ void check_output_byte(const byte arr[], int size){
 }
 
 template <unsigned int MNEMSIZE, unsigned int SALTSIZE> void deriveSeedFromMnemonic(const byte (& mnemonicSentence)[MNEMSIZE], const byte (& salt)[SALTSIZE], byte (& derivedSeed)[SHA512::DIGESTSIZE]){
+//void deriveSeedFromMnemonic(const byte (& mnemonicSentence)[], unsigned int mnem_size, const byte (& salt)[], unsigned int salt_size, byte (& derivedSeed)[SHA512::DIGESTSIZE]){
     // Password Based Key Derivation Function
     PKCS5_PBKDF2_HMAC<SHA512> hashPBKDF2;
-    unsigned int mnem_size = sizeof(mnemonicSentence);
-    unsigned int salt_size = sizeof(salt);
-    unsigned int seed_size = sizeof(derivedSeed);
+    size_t mnem_size = strlen((const char*) mnemonicSentence);
+    size_t salt_size = strlen((const char*) salt);
+    size_t seed_size = sizeof(derivedSeed);
+    std::cout << "Full print parameters IN FUNCTION: " << /*byteToStr(derivedSeed) << "\n" << seed_size << "\n" << */ byteToStr(mnemonicSentence) << "\n" << mnem_size << "\n" << byteToStr(salt) << "\n" <<salt_size << std::endl;
     hashPBKDF2.DeriveKey(derivedSeed, seed_size, 0x00, mnemonicSentence, mnem_size, salt, salt_size, 2048, 0.0f);
 }
 
@@ -224,10 +237,12 @@ int main(){
 
     byte salt[] = "mnemonic";
     size_t slen = strlen((const char*)salt);
+    std::cout << "SALT:  " << byteToStr(salt) << std::endl;
 
     byte derived_seed[SHA512::DIGESTSIZE];
     PKCS5_PBKDF2_HMAC<SHA512> pbkdf;
     byte unused = 0;
+    std::cout << "Full print parameters IN MAIN: " << byteToStr(mnemonic_sentence) << "\n" << mnemlen << "\n" << byteToStr(salt) << "\n" << slen << std::endl;
     pbkdf.DeriveKey(derived_seed, sizeof(derived_seed), unused, mnemonic_sentence, mnemlen, salt, slen, 2048, 0.0f);  
 
     // Output derived seed
@@ -411,6 +426,43 @@ int main(){
     std::cout << "hardened child priv key: "; check_output_byte(hard_child_priv_key, 32);
     std::cout << "hardened child pub key: "; check_output_byte(hard_child_pub_key, 33);
 
+    // Prepare mnemonic sentence and passphrase
+    byte mnemonicSentence[] = "tip unfair advance patient action teach behind dawn street uphold arrest error";
+    byte mnemBase[] = "mnemonic";
+    byte mnemPassphrase[] = "";
+
+    byte mnemonicSalt[sizeof(mnemBase)+sizeof(mnemPassphrase)-1];
+    memcpy(&mnemonicSalt, &mnemBase, sizeof(mnemBase));
+    memcpy(&(mnemonicSalt[sizeof(mnemBase)-1]), &mnemPassphrase, sizeof(mnemPassphrase));
+
+    // Generate seed, private/public key pair, chain code and prefixes
+    byte master_seed[SHA512::DIGESTSIZE];
+    byte master_privKey[32];
+    byte master_pubKey[33];
+    byte master_chainCode[32];
+    byte master_privPrefix[13];
+    byte master_pubPrefix[13];
+
+    deriveSeedFromMnemonic(mnemonicSentence, mnemonicSalt, master_seed);
+    //deriveSeedFromMnemonic(mnemonicSentence, sizeof(mnemonicSentence), mnemonicSalt, sizeof(mnemonicSalt), master_seed);
+    deriveMasterKeyFromSeed(master_seed, master_privKey, master_chainCode);
+    generatePubKeyFromPrivKey(master_privKey, master_pubKey);
+    serializationPrefix(const_cast<char*>("zprv"), 0x00, master_pubKey, 0, master_privPrefix);
+    serializationPrefix(const_cast<char*>("zpub"), 0x00, master_pubKey, 0, master_pubPrefix);
+
+    // Print
+    std::cout << "======== MASTER KEY ========" << std::endl;
+    std::cout << "Mnemonic sentence:    " << byteToStr(mnemonicSentence) << std::endl;
+    std::cout << "Mnemonic base:        " << byteToStr(mnemBase) << "\tsizeof: " << sizeof(mnemBase) << std::endl;
+    std::cout << "Passphrase:           " << byteToStr(mnemPassphrase) << "\tsizeof: " << sizeof(mnemPassphrase)  << std::endl;
+    std::cout << "Mnemonic SALT         " << byteToStr(mnemonicSalt) << std::endl;
+    std::cout << "SEED:                 " << byteToStr(master_seed) << std::endl;
+    std::cout << "MASTER PRIVATE KEY:   " << byteToStr(master_privKey) << std::endl;
+    std::cout << "MASTER PUBLIC KEY:    " << byteToStr(master_pubKey) << std::endl;
+    std::cout << "Master chain code:    " << byteToStr(master_chainCode) << std::endl;
+    std::cout << std::endl;
+
+
     // BIP 84 derivation path m/84'/0'/0'/0/0
     byte child_84_privKey[32];
     byte child_84_pubKey[33];
@@ -441,7 +493,7 @@ int main(){
     unsigned int index_hard = 2147483648;
     
     //void serializationPrefix(char* version, byte depth, const byte (& parentPublicKey)[33], unsigned int childNumber, byte (& serialPrefix)[13]){
-    deriveHardChildPrivKey(secret_key, chain_key, index_hard+84, child_84_privKey, child_84_chainCode);
+    deriveHardChildPrivKey(master_privKey, master_chainCode, index_hard+84, child_84_privKey, child_84_chainCode);
     generatePubKeyFromPrivKey(child_84_privKey, child_84_pubKey);
     serializationPrefix(const_cast<char*>("zprv"), 0x01, compressedPubKey, index_hard+84, child_84_privPrefix);
     serializationPrefix(const_cast<char*>("zpub"), 0x01, compressedPubKey, index_hard+84, child_84_pubPrefix);
@@ -468,6 +520,14 @@ int main(){
 
     //template <unsigned int KEYSIZE> void serializeKey(const byte (& prefix)[13], const byte (& key)[KEYSIZE], const byte (& chain)[32], byte (& serializedKey)[82], std::string & serializedKey_str)
     //std::string getAddressP2WPKH(const byte (& publicKey)[33]){
+    byte master_privKey_serialized[82];
+    byte master_pubKey_serialized[82];
+    std::string master_privKey_serialized_str;
+    std::string master_pubKey_serialized_str;
+    serializeKey(master_privPrefix, master_privKey, master_chainCode, master_privKey_serialized, master_privKey_serialized_str);
+    serializeKey(master_pubPrefix, master_pubKey, master_chainCode, master_pubKey_serialized, master_pubKey_serialized_str);
+    std::string master_pubKey_addressP2WPKH = getAddressP2WPKH(master_pubKey);
+
     byte child_84_privKey_serialized[82];
     byte child_84_pubKey_serialized[82];
     std::string child_84_privKey_serialized_str;
@@ -509,6 +569,10 @@ int main(){
     std::string child_84_0h_0h_0_0_pubKey_addressP2WPKH = getAddressP2WPKH(child_84_0h_0h_0_0_pubKey);
 
     std::cout << "\n======= DERIVATION TREE FOR BIP 84 ========\n";
+    std::cout << "master_privKey_serialized:               " << master_privKey_serialized_str << std::endl;
+    std::cout << "master_pubKey_serialized:                " << master_pubKey_serialized_str << std::endl;
+    std::cout << "master_pubKey_addressP2WPKH:             " << master_pubKey_addressP2WPKH << std::endl;
+    std::cout << std::endl;
     std::cout << "child_84_privKey_serialized:             " << child_84_privKey_serialized_str << std::endl;
     std::cout << "child_84_pubKey_serialized:              " << child_84_pubKey_serialized_str << std::endl;
     std::cout << "child_84_pubKey_addressP2WPKH:           " << child_84_pubKey_addressP2WPKH << std::endl;
