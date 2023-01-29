@@ -11,21 +11,14 @@
 
 #include <iostream>
 
-const char* knownwords[2] = {"hollow", "blast"};
+const char* knownwords[4] = {"hollow", "blast", "state", "monkey"};
 using namespace CryptoPP;
 
-const char* targetHEX = "0x272063C80EBB47CFA3F4CC088187F4B15CE05F7E917BBE7830785B6B16F3CF";
 const char* targetB58 = "bc1q7kw2uepv6hfffhhxx2vplkkpcwsslcw9hsupc6";
 
+Integer SECP256K1_CURVE_ORDER("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141h");
 
-void byteToStr(const byte inputByteArr[], int size, std::string & outputStr){
-    ArraySource strsrc(inputByteArr, size, true,
-        new HexEncoder(
-            new StringSink(outputStr)
-        )
-    );
-}
-
+// Conversion from byte array to string
 template <unsigned int SIZE> std::string byteToStr(const byte (& inputByteArr)[SIZE]){
     std::string outputStr;
     ArraySource strsrc(inputByteArr, sizeof(inputByteArr), true,
@@ -36,6 +29,7 @@ template <unsigned int SIZE> std::string byteToStr(const byte (& inputByteArr)[S
     return outputStr;
 }
 
+// Conversion from string to byte array
 template <unsigned int SIZE> void strToByte(const std::string inputStr, byte (& outputByteArr)[SIZE], int size){
     StringSource strsrc(inputStr, true,
         new HexDecoder(
@@ -44,12 +38,7 @@ template <unsigned int SIZE> void strToByte(const std::string inputStr, byte (& 
     );
 }
 
-void check_output_byte(const byte arr[], int size){
-    std::string root_str;
-    byteToStr(arr, size, root_str);
-    std::cout << root_str << std::endl;
-}
-
+// Derivation of Seed from Mnemonic phrase and Salt using Password Based Key Derivation Function
 template <unsigned int MNEMSIZE, unsigned int SALTSIZE> void deriveSeedFromMnemonic(const byte (& mnemonicSentence)[MNEMSIZE], const byte (& salt)[SALTSIZE], byte (& derivedSeed)[SHA512::DIGESTSIZE]){
     // Password Based Key Derivation Function
     PKCS5_PBKDF2_HMAC<SHA512> hashPBKDF2;
@@ -59,6 +48,7 @@ template <unsigned int MNEMSIZE, unsigned int SALTSIZE> void deriveSeedFromMnemo
     hashPBKDF2.DeriveKey(derivedSeed, seed_size, 0x00, mnemonicSentence, mnem_size, salt, salt_size, 2048, 0.0f);
 }
 
+// Derivation of the Master Key and Chain Code from the Seed
 void deriveMasterKeyFromSeed(const byte (& seed)[SHA512::DIGESTSIZE], byte (& masterPrivKey)[32], byte (& masterChainCode)[32]){
     byte salt[] = "Bitcoin seed";
     unsigned int salt_size = sizeof(salt);
@@ -76,6 +66,7 @@ void deriveMasterKeyFromSeed(const byte (& seed)[SHA512::DIGESTSIZE], byte (& ma
     memcpy(&masterChainCode, &(hashresult[32]), 32);
 }
 
+// Generate Public Key from Private Key using Elliptic Curve Digital Signature Algorithm with secp256k1 curve
 void generatePubKeyFromPrivKey(const byte (& privKey)[32], byte (& pubKey)[33]){
     ECDSA<ECP, SHA256>::PrivateKey privateKeyECDSA;
     privateKeyECDSA.Initialize(ASN1::secp256k1(), Integer(privKey, sizeof(privKey)));
@@ -99,32 +90,41 @@ void generatePubKeyFromPrivKey(const byte (& privKey)[32], byte (& pubKey)[33]){
     memcpy(&(pubKey[1]), &pubKeyElementX, 32);
 }
 
+// Derive hardened children private keys
 void deriveHardChildPrivKey(const byte (& masterPrivKey)[32], const byte (& masterChainCode)[32], unsigned int index, byte (& childPrivKey)[32], byte (& childChainCode)[32]){
     byte hashinput[1+sizeof(masterPrivKey)+sizeof(unsigned int)];
     byte hashresult[SHA512::DIGESTSIZE];
     byte index_byte[sizeof(unsigned int)];
+    
     memcpy(index_byte, &index, sizeof(unsigned int));
+    // Convert from little endian to big endian
     std::reverse(index_byte, index_byte+sizeof(unsigned int));
+
     hashinput[0] = 0x00;
     memcpy(&(hashinput[1]), &masterPrivKey, sizeof(masterPrivKey));
     memcpy(&(hashinput[1+sizeof(masterPrivKey)]), &index_byte, sizeof(unsigned int));
+    
     HMAC< SHA512 > hmacSHA512(masterChainCode, sizeof(masterChainCode));
     ArraySource arrsrc(hashinput, sizeof(hashinput), true,
         new HashFilter(hmacSHA512, 
             new ArraySink(hashresult, SHA512::DIGESTSIZE)
         )
     );
-    Integer childPrivKey_int((Integer(hashresult, 32) + Integer(masterPrivKey, 32)) % Integer("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141h"));
+
+    // Scalar addition of hash result with Private Key modulo order of the curve
+    Integer childPrivKey_int((Integer(hashresult, 32) + Integer(masterPrivKey, 32)) % SECP256K1_CURVE_ORDER);
     childPrivKey_int.Encode(childPrivKey, 32);
     memcpy(&childChainCode, &(hashresult[32]), 32);
 }
 
+// Derive normal children private keys
 void deriveSoftChildPrivKey(const byte (& masterPrivKey)[32], const byte (& masterPubKey)[33], const byte (& masterChainCode)[32], unsigned int index, byte (& childPrivKey)[32], byte (& childChainCode)[32]){
     byte hashinput[sizeof(masterPubKey)+sizeof(unsigned int)];
     byte hashresult[SHA512::DIGESTSIZE];
     byte index_byte[sizeof(unsigned int)];
 
     memcpy(index_byte, &index, sizeof(unsigned int));
+    // Convert from little endian to big endian
     std::reverse(index_byte, index_byte+sizeof(unsigned int));
 
     memcpy(&hashinput, &masterPubKey, sizeof(masterPubKey));
@@ -136,13 +136,15 @@ void deriveSoftChildPrivKey(const byte (& masterPrivKey)[32], const byte (& mast
             new ArraySink(hashresult, SHA512::DIGESTSIZE)
         )
     );
-    Integer childPrivKey_int((Integer(hashresult, 32) + Integer(masterPrivKey, 32)) % Integer("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141h"));
+
+    // Scalar addition of hash result with Private Key modulo order of the curve
+    Integer childPrivKey_int((Integer(hashresult, 32) + Integer(masterPrivKey, 32)) % SECP256K1_CURVE_ORDER);
     childPrivKey_int.Encode(childPrivKey, 32);
     memcpy(&childChainCode, &(hashresult[32]), 32);
 }
 
+// HASH160 is RIPEMD160 after SHA256 used for public addresses and parent fingerprint in serialization
 void hash160(const byte (& publicKey)[33], byte (& hashedPubKey)[RIPEMD160::DIGESTSIZE]){
-    // ripemd160(sha256(publicKey))
     SHA256 hashSHA256;
     RIPEMD160 hashRIPEMD160;
 
@@ -155,6 +157,7 @@ void hash160(const byte (& publicKey)[33], byte (& hashedPubKey)[RIPEMD160::DIGE
     );
 }
 
+// Calculate serialization prefix based on version number, depth of the child in key tree hierarchy, parent public key and the number of the child 
 void serializationPrefix(char* version, byte depth, const byte (& parentPublicKey)[33], unsigned int childNumber, byte (& serialPrefix)[13]){
     // Version bytes of the key ("zprv" and "zpub" in BIP 84 derivation path)
     byte ver[4];
@@ -182,6 +185,7 @@ void serializationPrefix(char* version, byte depth, const byte (& parentPublicKe
     memcpy(&(serialPrefix[9]), childN, sizeof(unsigned int));
 }
 
+// Generate serialized key as byte array and string, from the prefix, key, and chain code
 template <unsigned int KEYSIZE> void serializeKey(const byte (& prefix)[13], const byte (& key)[KEYSIZE], const byte (& chain)[32], byte (& serializedKey)[82], std::string & serializedKey_str){
     // Prepare byte sequence for SHA256 hash
     byte tempSequence[78];
@@ -210,8 +214,8 @@ template <unsigned int KEYSIZE> void serializeKey(const byte (& prefix)[13], con
     serializedKey_str = EncodeBase58(serializedKey_uint8, base58map);
 }
 
+// Calculate Pay-To-Witness-Public-Key-Hash Address (native segwit)
 std::string getAddressP2WPKH(const byte (& publicKey)[33]){
-    // Pay-To-Witness-Public-Key-Hash Address (native segwit)
     byte hashedPubKey[RIPEMD160::DIGESTSIZE];
     hash160(publicKey, hashedPubKey);
 
@@ -244,7 +248,6 @@ int main(){
     byte master_pubPrefix[13];
 
     deriveSeedFromMnemonic(mnemonicSentence, mnemonicSalt, master_seed);
-    //deriveSeedFromMnemonic(mnemonicSentence, sizeof(mnemonicSentence), mnemonicSalt, sizeof(mnemonicSalt), master_seed);
     deriveMasterKeyFromSeed(master_seed, master_privKey, master_chainCode);
     generatePubKeyFromPrivKey(master_privKey, master_pubKey);
     serializationPrefix(const_cast<char*>("zprv"), 0x00, master_pubKey, 0, master_privPrefix);
@@ -292,8 +295,10 @@ int main(){
     byte child_84_0h_0h_0_0_privPrefix[13];
     byte child_84_0h_0h_0_0_pubPrefix[13];
     
+    // Index for hardened child (can not be derived from public key)
     unsigned int index_hard = 2147483648;
     
+    // Derive hierarchy of keys in the derivation path
     deriveHardChildPrivKey(master_privKey, master_chainCode, index_hard+84, child_84_privKey, child_84_chainCode);
     generatePubKeyFromPrivKey(child_84_privKey, child_84_pubKey);
     serializationPrefix(const_cast<char*>("zprv"), 0x01, master_pubKey, index_hard+84, child_84_privPrefix);
@@ -319,6 +324,7 @@ int main(){
     serializationPrefix(const_cast<char*>("zprv"), 0x05, child_84_0h_0h_0_pubKey, 0, child_84_0h_0h_0_0_privPrefix);
     serializationPrefix(const_cast<char*>("zpub"), 0x05, child_84_0h_0h_0_pubKey, 0, child_84_0h_0h_0_0_pubPrefix);
 
+    // Serialization
     byte master_privKey_serialized[82];
     byte master_pubKey_serialized[82];
     std::string master_privKey_serialized_str;
@@ -367,6 +373,7 @@ int main(){
     serializeKey(child_84_0h_0h_0_0_pubPrefix, child_84_0h_0h_0_0_pubKey, child_84_0h_0h_0_0_chainCode, child_84_0h_0h_0_0_pubKey_serialized, child_84_0h_0h_0_0_pubKey_serialized_str);
     std::string child_84_0h_0h_0_0_pubKey_addressP2WPKH = getAddressP2WPKH(child_84_0h_0h_0_0_pubKey);
 
+    // Print
     std::cout << "\n======= DERIVATION TREE FOR BIP 84 ========\n";
     std::cout << "master_privKey_serialized:               " << master_privKey_serialized_str << std::endl;
     std::cout << "master_pubKey_serialized:                " << master_pubKey_serialized_str << std::endl;
