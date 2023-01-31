@@ -1,4 +1,4 @@
-const char* wordlist[2048] = {
+const char* BTC_WORD_LIST[2048] = {
     "abandon", "ability", "able", "about", "above", "absent", "absorb", "abstract", "absurd",
     "abuse", "access", "accident", "account", "accuse", "achieve", "acid", "acoustic", "acquire",
     "across", "act", "action", "actor", "actress", "actual", "adapt", "add", "addict", "address",

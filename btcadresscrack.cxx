@@ -11,12 +11,14 @@
 
 #include <iostream>
 
-const char* knownwords[4] = {"hollow", "blast", "state", "monkey"};
 using namespace CryptoPP;
 
-const char* targetB58 = "bc1q7kw2uepv6hfffhhxx2vplkkpcwsslcw9hsupc6";
-
-Integer SECP256K1_CURVE_ORDER("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141h");
+// Global variables
+#define MAX_WORDS 2048
+const Integer SECP256K1_CURVE_ORDER("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141h");
+const char* TARGET_ADDRESS = "bc1q7kw2uepv6hfffhhxx2vplkkpcwsslcw9hsupc6";
+const int N_WORDS = 3;
+const char* KNOWN_WORDS[3] = {"hollow", "blast", ""};//, "monkey", "love", "strike", "lion", "target", "river", "valley", "town", "pistol", ""};
 
 // Conversion from byte array to string
 template <unsigned int SIZE> std::string byteToStr(const byte (& inputByteArr)[SIZE]){
@@ -228,8 +230,88 @@ std::string getAddressP2WPKH(const byte (& publicKey)[33]){
 
 }
 
+// Find index of a given word in the word list using binary search
+int findIndexInWordlist(const char* word, int start, int end) {
+    if (start <= end) {
+        int mid = start + (end - start) / 2;
+        int result = strcmp(word, BTC_WORD_LIST[mid]);
+        if (result == 0) {
+            return mid;
+        } else if (result < 0) {
+            return findIndexInWordlist(word, start, mid - 1);
+        } else {
+            return findIndexInWordlist(word, mid + 1, end);
+        }
+    }
+    return -1;
+}
+
+int concatenateListIntoSentence() {
+    int length = 0;
+    for (int i = 0; i < N_WORDS; i++) {
+        length += strlen(KNOWN_WORDS[i]) + 1;  // +1 for space
+    }
+    length--;  // remove extra space after the last word
+    char knownwords_list[length + 1];
+    knownwords_list[0] = '\0';
+    for (int i = 0; i < N_WORDS; i++) {
+        strcat(knownwords_list, KNOWN_WORDS[i]);
+        if (i < N_WORDS - 1) {
+            strcat(knownwords_list, " ");
+        }
+    }
+    printf("%s\n", knownwords_list);
+    return 0;
+}
+
+// Recursive function which generates all permutations of the list of words
+void loopPermutations(const char** arr, int l, int r) {
+    if (l == r) {
+        // Print the permuted array
+        // TODO checksum and launch cryptography with this array
+        for (int i = 0; i < N_WORDS; i++) {
+            std::cout << arr[i] << " ";
+        }
+        std::cout << std::endl;
+    } else {
+        for (int i = l; i <= r; i++) {
+            // Swap elements at index l and i
+            std::swap(arr[l], arr[i]);
+            // Recursively permute the subarray arr[l+1...r]
+            loopPermutations(arr, l+1, r);
+            // Swap back the elements to restore the original array
+            std::swap(arr[l], arr[i]);
+        }
+    }
+}
+
+// Recursive function which generates all combinations of the remaining missing words
+void loopCombinations(const char* words[], int currIndex, int numWords){
+    if (currIndex == numWords) {
+        // Launch permutations of this combination
+        loopPermutations(words, 0, numWords-1);
+        return;
+    }
+    // Check if the current word is filled in
+    if (strlen(words[currIndex]) > 0) {
+        // If yes, go to the next word
+        loopCombinations(words, currIndex + 1, numWords);
+    } else {
+        // Else, loop over all possible words and go to the next word each time
+        for (int i = 0; i < MAX_WORDS; i++) {
+            words[currIndex] = BTC_WORD_LIST[i];
+            loopCombinations(words, currIndex + 1, numWords);
+            words[currIndex] = "";
+        }
+    }
+}
+
+void launch(){
+    loopCombinations(KNOWN_WORDS, 0, N_WORDS);
+}
 
 int main(){
+    launch();
     // Prepare mnemonic sentence and passphrase
     byte mnemonicSentence[] = "tip unfair advance patient action teach behind dawn street uphold arrest error";
     byte mnemBase[] = "mnemonic";
