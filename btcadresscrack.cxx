@@ -16,14 +16,19 @@ using namespace CryptoPP;
 // Global variables
 #define MAX_WORDS 2048
 const Integer SECP256K1_CURVE_ORDER("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141h");
-const char* TARGET_ADDRESS = "bc1q7kw2uepv6hfffhhxx2vplkkpcwsslcw9hsupc6";
-const int N_WORDS = 3;
-const char* KNOWN_WORDS[3] = {"hollow", "blast", ""};//, "monkey", "love", "strike", "lion", "target", "river", "valley", "town", "pistol", ""};
+//const char* TARGET_ADDRESS = "bc1q7kw2uepv6hfffhhxx2vplkkpcwsslcw9hsupc6";
+const char* TARGET_ADDRESS = "bc1qtkh4mq24ev94j9usmlkxq0plfax9z8ztreadcx";
+const int N_WORDS = 13;
+//const char* KNOWN_WORDS[13] = {"hollow", "blast", "monkey", "love", "strike", "lion", "target", "river", "valley", "town", "pistol", "", ""};
+const char* KNOWN_WORDS[13] = {"skull", "faint", "enter", "welcome", "later", "drift", "depart", "moral", "other", "wealth", "logic", "bacon", "blast"};
+
+int checkAddressCollisionWithTarget(const char* sentence, const char* passphrase);
 
 // Conversion from byte array to string
-template <unsigned int SIZE> std::string byteToStr(const byte (& inputByteArr)[SIZE]){
+//template <unsigned int SIZE> std::string byteToStr(const byte (& inputByteArr)[SIZE]){
+std::string byteToStr(const byte* inputByteArr, int SIZE){
     std::string outputStr;
-    ArraySource strsrc(inputByteArr, sizeof(inputByteArr), true,
+    ArraySource strsrc(inputByteArr, SIZE, true,
         new HexEncoder(
             new StringSink(outputStr)
         )
@@ -41,7 +46,8 @@ template <unsigned int SIZE> void strToByte(const std::string inputStr, byte (& 
 }
 
 // Derivation of Seed from Mnemonic phrase and Salt using Password Based Key Derivation Function
-template <unsigned int MNEMSIZE, unsigned int SALTSIZE> void deriveSeedFromMnemonic(const byte (& mnemonicSentence)[MNEMSIZE], const byte (& salt)[SALTSIZE], byte (& derivedSeed)[SHA512::DIGESTSIZE]){
+//template <unsigned int MNEMSIZE, unsigned int SALTSIZE> void deriveSeedFromMnemonic(const byte (& mnemonicSentence)[MNEMSIZE], const byte (& salt)[SALTSIZE], byte (& derivedSeed)[SHA512::DIGESTSIZE]){
+void deriveSeedFromMnemonic(const byte* mnemonicSentence, int mnem__size, const byte* salt, int salt__size, byte (& derivedSeed)[SHA512::DIGESTSIZE]){
     // Password Based Key Derivation Function
     PKCS5_PBKDF2_HMAC<SHA512> hashPBKDF2;
     size_t mnem_size = strlen((const char*) mnemonicSentence);
@@ -246,33 +252,52 @@ int findIndexInWordlist(const char* word, int start, int end) {
     return -1;
 }
 
-int concatenateListIntoSentence() {
-    int length = 0;
-    for (int i = 0; i < N_WORDS; i++) {
-        length += strlen(KNOWN_WORDS[i]) + 1;  // +1 for space
+bool verifyMnemonicChecksum(const char** words){
+    // TODO:
+    // split into mnemonic sentence and passphrase
+    // find index for each of mnemonic sentence words
+    // convert and split into 128 bit input and 4 bit checksum
+    // calculate checksum of 128 bit input using SHA256
+    // get the first 4 bits from checksum and compare with last 4 bits of mnemonic sentence
+    int indWords[12];
+    for (int i = 0; i < 12; i++){
+        indWords[i] = findIndexInWordlist(words[i], 0, MAX_WORDS);
     }
-    length--;  // remove extra space after the last word
-    char knownwords_list[length + 1];
-    knownwords_list[0] = '\0';
-    for (int i = 0; i < N_WORDS; i++) {
-        strcat(knownwords_list, KNOWN_WORDS[i]);
-        if (i < N_WORDS - 1) {
-            strcat(knownwords_list, " ");
+    
+    byte first4;
+    int last4 = indWords[11] & 0x0F;
+    return false;
+}
+
+char* concatenateListIntoSentence(const char** wordlist, int n) {
+    int length = 0;
+    for (int i = 0; i < n; i++) {
+        length += strlen(wordlist[i]) + 1;  // +1 for space
+    }
+    char* sentence = static_cast<char*>(malloc(length));
+    sentence[0] = '\0';
+    for (int i = 0; i < n; i++) {
+        strcat(sentence, wordlist[i]);
+        if (i < n - 1) {
+            strcat(sentence, " ");
         }
     }
-    printf("%s\n", knownwords_list);
-    return 0;
+    return sentence;
 }
 
 // Recursive function which generates all permutations of the list of words
 void loopPermutations(const char** arr, int l, int r) {
     if (l == r) {
-        // Print the permuted array
-        // TODO checksum and launch cryptography with this array
-        for (int i = 0; i < N_WORDS; i++) {
-            std::cout << arr[i] << " ";
+        // Verify validity of this permutation as the mnemonic sentence
+        // if (verifyMnemonicChecksum(arr) { ...  }
+        const char* sentence = concatenateListIntoSentence(arr, N_WORDS-1);
+        const char* passphrase = arr[N_WORDS-1]; 
+        // Check address collision with target
+        int status = checkAddressCollisionWithTarget(sentence, passphrase);
+        if (status == 1){
+            std::cout << std::endl << "******** COLLISION ********" << std::endl;
+            exit(0);
         }
-        std::cout << std::endl;
     } else {
         for (int i = l; i <= r; i++) {
             // Swap elements at index l and i
@@ -306,16 +331,23 @@ void loopCombinations(const char* words[], int currIndex, int numWords){
     }
 }
 
-void launch(){
-    loopCombinations(KNOWN_WORDS, 0, N_WORDS);
-}
+int checkAddressCollisionWithTarget(const char* sentence, const char* passphrase){
+    // Prepare mnemonic sentence into byte array
+    int lengthOfMnemSentence = strlen(sentence);
+    byte mnemonicSentence[lengthOfMnemSentence+1];
+    for (int i = 0; i < lengthOfMnemSentence; i++){
+        mnemonicSentence[i] = static_cast<unsigned char>(sentence[i]);
+    }
+    mnemonicSentence[lengthOfMnemSentence] = 0x00;
 
-int main(){
-    launch();
-    // Prepare mnemonic sentence and passphrase
-    byte mnemonicSentence[] = "tip unfair advance patient action teach behind dawn street uphold arrest error";
+    // Prepare passphrase into byte array
     byte mnemBase[] = "mnemonic";
-    byte mnemPassphrase[] = "";
+    int lengthOfPassphrase = strlen(passphrase);
+    byte mnemPassphrase[lengthOfPassphrase+1];
+    for (int i = 0; i < lengthOfPassphrase; i++){
+        mnemPassphrase[i] = static_cast<unsigned char>(passphrase[i]);
+    }
+    mnemPassphrase[lengthOfPassphrase] = 0x00;
 
     byte mnemonicSalt[sizeof(mnemBase)+sizeof(mnemPassphrase)-1];
     memcpy(&mnemonicSalt, &mnemBase, sizeof(mnemBase));
@@ -329,24 +361,24 @@ int main(){
     byte master_privPrefix[13];
     byte master_pubPrefix[13];
 
-    deriveSeedFromMnemonic(mnemonicSentence, mnemonicSalt, master_seed);
+    deriveSeedFromMnemonic(mnemonicSentence, sizeof(mnemonicSentence), mnemonicSalt, sizeof(mnemonicSalt), master_seed);
     deriveMasterKeyFromSeed(master_seed, master_privKey, master_chainCode);
     generatePubKeyFromPrivKey(master_privKey, master_pubKey);
     serializationPrefix(const_cast<char*>("zprv"), 0x00, master_pubKey, 0, master_privPrefix);
     serializationPrefix(const_cast<char*>("zpub"), 0x00, master_pubKey, 0, master_pubPrefix);
 
     // Print
-    std::cout << "======== MASTER KEY ========" << std::endl;
+    std::cout << "============== MASTER KEY =============" << std::endl;
     std::cout << "Mnemonic sentence (human readable):    " << reinterpret_cast<const char*>(mnemonicSentence) << std::endl;
     std::cout << "Mnemonic SALT (human readable):        " << reinterpret_cast<const char*>(mnemonicSalt) << std::endl;
-    std::cout << "Mnemonic sentence:                     " << byteToStr(mnemonicSentence) << std::endl;
-    std::cout << "Mnemonic base:                         " << byteToStr(mnemBase) << std::endl;
-    std::cout << "Passphrase:                            " << byteToStr(mnemPassphrase) << std::endl;
-    std::cout << "Mnemonic SALT:                         " << byteToStr(mnemonicSalt) << std::endl;
-    std::cout << "SEED:                                  " << byteToStr(master_seed) << std::endl;
-    std::cout << "MASTER PRIVATE KEY:                    " << byteToStr(master_privKey) << std::endl;
-    std::cout << "MASTER PUBLIC KEY:                     " << byteToStr(master_pubKey) << std::endl;
-    std::cout << "Master chain code:                     " << byteToStr(master_chainCode) << std::endl;
+    std::cout << "Mnemonic sentence:                     " << byteToStr(mnemonicSentence, sizeof(mnemonicSentence)) << std::endl;
+    std::cout << "Mnemonic base:                         " << byteToStr(mnemBase, sizeof(mnemBase)) << std::endl;
+    std::cout << "Passphrase:                            " << byteToStr(mnemPassphrase, lengthOfPassphrase) << std::endl;
+    std::cout << "Mnemonic SALT:                         " << byteToStr(mnemonicSalt, sizeof(mnemonicSalt)) << std::endl;
+    std::cout << "SEED:                                  " << byteToStr(master_seed, sizeof(master_seed)) << std::endl;
+    std::cout << "MASTER PRIVATE KEY:                    " << byteToStr(master_privKey, sizeof(master_privKey)) << std::endl;
+    std::cout << "MASTER PUBLIC KEY:                     " << byteToStr(master_pubKey, sizeof(master_pubKey)) << std::endl;
+    std::cout << "Master chain code:                     " << byteToStr(master_chainCode, sizeof(master_chainCode)) << std::endl;
     std::cout << std::endl;
 
 
@@ -480,6 +512,15 @@ int main(){
     std::cout << "child_84_0h_0h_0_0_privKey_serialized:   " << child_84_0h_0h_0_0_privKey_serialized_str << std::endl;
     std::cout << "child_84_0h_0h_0_0_pubKey_serialized:    " << child_84_0h_0h_0_0_pubKey_serialized_str << std::endl;
     std::cout << "child_84_0h_0h_0_0_pubKey_addressP2WPKH  " << child_84_0h_0h_0_0_pubKey_addressP2WPKH << std::endl;
+    std::cout << std::endl;
 
+    if (strcmp(child_84_0h_0h_0_0_pubKey_addressP2WPKH.c_str(), TARGET_ADDRESS) == 0){
+        return 1;
+    }
+    return 0;
+}
+
+int main(){
+    loopCombinations(KNOWN_WORDS, 0, N_WORDS);
     return 0;
 }
