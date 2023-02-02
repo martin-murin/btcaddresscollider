@@ -10,6 +10,7 @@
 #include "cryptopp/hex.h"
 
 #include <iostream>
+#include <bitset>
 
 using namespace CryptoPP;
 
@@ -17,15 +18,12 @@ using namespace CryptoPP;
 #define MAX_WORDS 2048
 const Integer SECP256K1_CURVE_ORDER("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141h");
 const char* TARGET_ADDRESS = "bc1q7kw2uepv6hfffhhxx2vplkkpcwsslcw9hsupc6";
-//const char* TARGET_ADDRESS = "bc1qtkh4mq24ev94j9usmlkxq0plfax9z8ztreadcx";
 const int N_WORDS = 13;
-const char* KNOWN_WORDS[13] = {"hollow", "blast", "monkey", "state", "select", "elder", "present", "horse", "argue", "ring", "profit", "timber", "banana"};
-//const char* KNOWN_WORDS[13] = {"skull", "faint", "enter", "welcome", "later", "drift", "depart", "moral", "other", "wealth", "logic", "bacon", "blast"};
+const char* KNOWN_WORDS[13] = {"blast", "hollow", "monkey", "state", "select", "elder", "present", "horse", "argue", "ring", "profit", "timber", "banana"};
 
 int checkAddressCollisionWithTarget(const char* sentence, const char* passphrase);
 
 // Conversion from byte array to string
-//template <unsigned int SIZE> std::string byteToStr(const byte (& inputByteArr)[SIZE]){
 std::string byteToStr(const byte* inputByteArr, int SIZE){
     std::string outputStr;
     ArraySource strsrc(inputByteArr, SIZE, true,
@@ -46,7 +44,6 @@ template <unsigned int SIZE> void strToByte(const std::string inputStr, byte (& 
 }
 
 // Derivation of Seed from Mnemonic phrase and Salt using Password Based Key Derivation Function
-//template <unsigned int MNEMSIZE, unsigned int SALTSIZE> void deriveSeedFromMnemonic(const byte (& mnemonicSentence)[MNEMSIZE], const byte (& salt)[SALTSIZE], byte (& derivedSeed)[SHA512::DIGESTSIZE]){
 void deriveSeedFromMnemonic(const byte* mnemonicSentence, int mnem__size, const byte* salt, int salt__size, byte (& derivedSeed)[SHA512::DIGESTSIZE]){
     // Password Based Key Derivation Function
     PKCS5_PBKDF2_HMAC<SHA512> hashPBKDF2;
@@ -252,20 +249,54 @@ int findIndexInWordlist(const char* word, int start, int end) {
     return -1;
 }
 
+// Verify that this order of words gives a valid mnemonic phrase 
 bool verifyMnemonicChecksum(const char** words){
-    // TODO:
-    // split into mnemonic sentence and passphrase
-    // find index for each of mnemonic sentence words
-    // convert and split into 128 bit input and 4 bit checksum
-    // calculate checksum of 128 bit input using SHA256
-    // get the first 4 bits from checksum and compare with last 4 bits of mnemonic sentence
+    // Get indices of the words
     int indWords[12];
     for (int i = 0; i < 12; i++){
         indWords[i] = findIndexInWordlist(words[i], 0, MAX_WORDS);
     }
-    
-    byte first4;
-    int last4 = indWords[11] & 0x0F;
+
+    // Concatenate binary representations of 11 least significant digits of the indices
+    std::bitset<132> bits;
+    for (int i = 0; i < 12; i++){
+        int num = indWords[i];
+        for (int j = 0; j < 11; j++) {
+            // reverse order for big endian encoding
+            bits[i * 11 + (10 - j)] = num & 1;
+            num >>= 1;
+        }
+    }
+
+    // Convert the first 128 bits into array of 16 bytes for hash input
+    byte mnemonic_bytes[16];
+    for (int i = 0; i < 16; i++) {
+        unsigned char c = 0x00;
+        for (int j = 0; j < 8; j++){
+            // reverse order for big endian encoding
+            if (bits[8 * i + (7 - j)]){
+                c |= 1 << j;
+            }
+        }
+        mnemonic_bytes[i] = c;
+    }
+
+    // Calculate the checksum using SHA256
+    SHA256 hashSHA256;
+    byte checksum[SHA256::DIGESTSIZE];
+    ArraySource arrsrc(mnemonic_bytes, sizeof(mnemonic_bytes), true,
+        new HashFilter(hashSHA256,
+            new ArraySink(checksum, SHA256::DIGESTSIZE)
+        )
+    );
+
+    // Verify if the first 4 bits of the checksum equal the last four bits of the mnemonic
+    unsigned int first4 = (unsigned int)(checksum[0] >> 4);
+    unsigned int last4 = indWords[11] & 0x0F;
+
+    if (first4 == last4){
+        return true;
+    }
     return false;
 }
 
@@ -289,7 +320,7 @@ char* concatenateListIntoSentence(const char** wordlist, int n) {
 void loopPermutations(const char** arr, int l, int r) {
     if (l == r) {
         // Verify validity of this permutation as the mnemonic sentence
-        // if (verifyMnemonicChecksum(arr) { ...  }
+        if (! verifyMnemonicChecksum(arr)) { return; }
         const char* sentence = concatenateListIntoSentence(arr, N_WORDS-1);
         const char* passphrase = arr[N_WORDS-1]; 
         // Check address collision with target
@@ -371,7 +402,6 @@ int checkAddressCollisionWithTarget(const char* sentence, const char* passphrase
     serializationPrefix(const_cast<char*>("zpub"), 0x00, master_pubKey, 0, master_pubPrefix);
 
     // Print
-    /*
     std::cout << "============== MASTER KEY =============" << std::endl;
     std::cout << "Mnemonic sentence (human readable):    " << reinterpret_cast<const char*>(mnemonicSentence) << std::endl;
     std::cout << "Mnemonic SALT (human readable):        " << reinterpret_cast<const char*>(mnemonicSalt) << std::endl;
@@ -384,9 +414,6 @@ int checkAddressCollisionWithTarget(const char* sentence, const char* passphrase
     std::cout << "MASTER PUBLIC KEY:                     " << byteToStr(master_pubKey, sizeof(master_pubKey)) << std::endl;
     std::cout << "Master chain code:                     " << byteToStr(master_chainCode, sizeof(master_chainCode)) << std::endl;
     std::cout << std::endl;
-    */
-    std::cout << "Mnemonic sentence (human readable):    " << reinterpret_cast<const char*>(mnemonicSentence) << std::endl;
-    std::cout << "Mnemonic SALT (human readable):        " << reinterpret_cast<const char*>(mnemonicSalt) << std::endl;
 
     // BIP 84 derivation path m/84'/0'/0'/0/0
     byte child_84_privKey[32];
@@ -494,7 +521,6 @@ int checkAddressCollisionWithTarget(const char* sentence, const char* passphrase
     std::string child_84_0h_0h_0_0_pubKey_addressP2WPKH = getAddressP2WPKH(child_84_0h_0h_0_0_pubKey);
 
     // Print
-    /*
     std::cout << "\n======= DERIVATION TREE FOR BIP 84 ========\n";
     std::cout << "master_privKey_serialized:               " << master_privKey_serialized_str << std::endl;
     std::cout << "master_pubKey_serialized:                " << master_pubKey_serialized_str << std::endl;
@@ -520,9 +546,7 @@ int checkAddressCollisionWithTarget(const char* sentence, const char* passphrase
     std::cout << "child_84_0h_0h_0_0_pubKey_serialized:    " << child_84_0h_0h_0_0_pubKey_serialized_str << std::endl;
     std::cout << "child_84_0h_0h_0_0_pubKey_addressP2WPKH  " << child_84_0h_0h_0_0_pubKey_addressP2WPKH << std::endl;
     std::cout << std::endl;
-    */
-    std::cout << "child_84_0h_0h_0_0_pubKey_addressP2WPKH  " << child_84_0h_0h_0_0_pubKey_addressP2WPKH << std::endl;
-    std::cout << std::endl;
+    
     if (strcmp(child_84_0h_0h_0_0_pubKey_addressP2WPKH.c_str(), TARGET_ADDRESS) == 0){
         return 1;
     }
