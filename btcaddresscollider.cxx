@@ -332,10 +332,12 @@ void loopPermutations(const char** arr, int l, int r) {
             std::cout << "PASSPHRASE " << passphrase << std::endl;
             exit(0);
         }
-    } else {
+    } else { 
         for (int i = l; i <= r; i++) {
             // Swap elements at index l and i
             std::swap(arr[l], arr[i]);
+            // Monitoring
+            if (l == 4) {std::cout << arr[0] << "  " << arr[1] << "  " << arr[2] << "  " << arr[3] << "  " << arr[4] << std::endl;}
             // Recursively permute the subarray arr[l+1...r]
             loopPermutations(arr, l+1, r);
             // Swap back the elements to restore the original array
@@ -392,50 +394,36 @@ int checkAddressCollisionWithTarget(const char* sentence, const char* passphrase
     byte master_privKey[32];
     byte master_pubKey[33];
     byte master_chainCode[32];
-    byte master_privPrefix[13];
-    byte master_pubPrefix[13];
+    //byte master_privPrefix[13];
+    //byte master_pubPrefix[13];
 
     deriveSeedFromMnemonic(mnemonicSentence, sizeof(mnemonicSentence), mnemonicSalt, sizeof(mnemonicSalt), master_seed);
     deriveMasterKeyFromSeed(master_seed, master_privKey, master_chainCode);
     generatePubKeyFromPrivKey(master_privKey, master_pubKey);
-    serializationPrefix(const_cast<char*>("zprv"), 0x00, master_pubKey, 0, master_privPrefix);
-    serializationPrefix(const_cast<char*>("zpub"), 0x00, master_pubKey, 0, master_pubPrefix);
-
-    // Print
-    std::cout << "============== MASTER KEY =============" << std::endl;
-    std::cout << "Mnemonic sentence (human readable):    " << reinterpret_cast<const char*>(mnemonicSentence) << std::endl;
-    std::cout << "Mnemonic SALT (human readable):        " << reinterpret_cast<const char*>(mnemonicSalt) << std::endl;
-    std::cout << "Mnemonic sentence:                     " << byteToStr(mnemonicSentence, sizeof(mnemonicSentence)) << std::endl;
-    std::cout << "Mnemonic base:                         " << byteToStr(mnemBase, sizeof(mnemBase)) << std::endl;
-    std::cout << "Passphrase:                            " << byteToStr(mnemPassphrase, lengthOfPassphrase) << std::endl;
-    std::cout << "Mnemonic SALT:                         " << byteToStr(mnemonicSalt, sizeof(mnemonicSalt)) << std::endl;
-    std::cout << "SEED:                                  " << byteToStr(master_seed, sizeof(master_seed)) << std::endl;
-    std::cout << "MASTER PRIVATE KEY:                    " << byteToStr(master_privKey, sizeof(master_privKey)) << std::endl;
-    std::cout << "MASTER PUBLIC KEY:                     " << byteToStr(master_pubKey, sizeof(master_pubKey)) << std::endl;
-    std::cout << "Master chain code:                     " << byteToStr(master_chainCode, sizeof(master_chainCode)) << std::endl;
-    std::cout << std::endl;
+    //serializationPrefix(const_cast<char*>("zprv"), 0x00, master_pubKey, 0, master_privPrefix);
+    //serializationPrefix(const_cast<char*>("zpub"), 0x00, master_pubKey, 0, master_pubPrefix);
 
     // BIP 84 derivation path m/84'/0'/0'/0/0
     byte child_84_privKey[32];
     byte child_84_pubKey[33];
     byte child_84_chainCode[32];
-    byte child_84_privPrefix[13];
-    byte child_84_pubPrefix[13];
+    //byte child_84_privPrefix[13];
+    //byte child_84_pubPrefix[13];
     byte child_84_0h_privKey[32];
     byte child_84_0h_pubKey[33];
     byte child_84_0h_chainCode[32];
-    byte child_84_0h_privPrefix[13];
-    byte child_84_0h_pubPrefix[13];
+    //byte child_84_0h_privPrefix[13];
+    //byte child_84_0h_pubPrefix[13];
     byte child_84_0h_0h_privKey[32];
     byte child_84_0h_0h_pubKey[33];
     byte child_84_0h_0h_chainCode[32];
-    byte child_84_0h_0h_privPrefix[13];
-    byte child_84_0h_0h_pubPrefix[13];
+    //byte child_84_0h_0h_privPrefix[13];
+    //byte child_84_0h_0h_pubPrefix[13];
     byte child_84_0h_0h_0_privKey[32];
     byte child_84_0h_0h_0_pubKey[33];
     byte child_84_0h_0h_0_chainCode[32];
-    byte child_84_0h_0h_0_privPrefix[13];
-    byte child_84_0h_0h_0_pubPrefix[13];
+    //byte child_84_0h_0h_0_privPrefix[13];
+    //byte child_84_0h_0h_0_pubPrefix[13];
     byte child_84_0h_0h_0_0_privKey[32];
     byte child_84_0h_0h_0_0_pubKey[33];
     byte child_84_0h_0h_0_0_chainCode[32];
@@ -448,23 +436,23 @@ int checkAddressCollisionWithTarget(const char* sentence, const char* passphrase
     // Derive hierarchy of keys in the derivation path
     deriveHardChildPrivKey(master_privKey, master_chainCode, index_hard+84, child_84_privKey, child_84_chainCode);
     generatePubKeyFromPrivKey(child_84_privKey, child_84_pubKey);
-    serializationPrefix(const_cast<char*>("zprv"), 0x01, master_pubKey, index_hard+84, child_84_privPrefix);
-    serializationPrefix(const_cast<char*>("zpub"), 0x01, master_pubKey, index_hard+84, child_84_pubPrefix);
+    //serializationPrefix(const_cast<char*>("zprv"), 0x01, master_pubKey, index_hard+84, child_84_privPrefix);
+    //serializationPrefix(const_cast<char*>("zpub"), 0x01, master_pubKey, index_hard+84, child_84_pubPrefix);
     
     deriveHardChildPrivKey(child_84_privKey, child_84_chainCode, index_hard, child_84_0h_privKey, child_84_0h_chainCode);
     generatePubKeyFromPrivKey(child_84_0h_privKey, child_84_0h_pubKey);
-    serializationPrefix(const_cast<char*>("zprv"), 0x02, child_84_pubKey, index_hard, child_84_0h_privPrefix);
-    serializationPrefix(const_cast<char*>("zpub"), 0x02, child_84_pubKey, index_hard, child_84_0h_pubPrefix);
+    //serializationPrefix(const_cast<char*>("zprv"), 0x02, child_84_pubKey, index_hard, child_84_0h_privPrefix);
+    //serializationPrefix(const_cast<char*>("zpub"), 0x02, child_84_pubKey, index_hard, child_84_0h_pubPrefix);
     
     deriveHardChildPrivKey(child_84_0h_privKey, child_84_0h_chainCode, index_hard, child_84_0h_0h_privKey, child_84_0h_0h_chainCode);
     generatePubKeyFromPrivKey(child_84_0h_0h_privKey, child_84_0h_0h_pubKey);
-    serializationPrefix(const_cast<char*>("zprv"), 0x03, child_84_0h_pubKey, index_hard, child_84_0h_0h_privPrefix);
-    serializationPrefix(const_cast<char*>("zpub"), 0x03, child_84_0h_pubKey, index_hard, child_84_0h_0h_pubPrefix);
+    //serializationPrefix(const_cast<char*>("zprv"), 0x03, child_84_0h_pubKey, index_hard, child_84_0h_0h_privPrefix);
+    //serializationPrefix(const_cast<char*>("zpub"), 0x03, child_84_0h_pubKey, index_hard, child_84_0h_0h_pubPrefix);
 
     deriveSoftChildPrivKey(child_84_0h_0h_privKey, child_84_0h_0h_pubKey, child_84_0h_0h_chainCode, 0, child_84_0h_0h_0_privKey, child_84_0h_0h_0_chainCode);
     generatePubKeyFromPrivKey(child_84_0h_0h_0_privKey, child_84_0h_0h_0_pubKey);
-    serializationPrefix(const_cast<char*>("zprv"), 0x04, child_84_0h_0h_pubKey, 0, child_84_0h_0h_0_privPrefix);
-    serializationPrefix(const_cast<char*>("zpub"), 0x04, child_84_0h_0h_pubKey, 0, child_84_0h_0h_0_pubPrefix);
+    //serializationPrefix(const_cast<char*>("zprv"), 0x04, child_84_0h_0h_pubKey, 0, child_84_0h_0h_0_privPrefix);
+    //serializationPrefix(const_cast<char*>("zpub"), 0x04, child_84_0h_0h_pubKey, 0, child_84_0h_0h_0_pubPrefix);
 
     deriveSoftChildPrivKey(child_84_0h_0h_0_privKey, child_84_0h_0h_0_pubKey, child_84_0h_0h_0_chainCode, 0, child_84_0h_0h_0_0_privKey, child_84_0h_0h_0_0_chainCode);
     generatePubKeyFromPrivKey(child_84_0h_0h_0_0_privKey, child_84_0h_0h_0_0_pubKey);
@@ -472,6 +460,7 @@ int checkAddressCollisionWithTarget(const char* sentence, const char* passphrase
     serializationPrefix(const_cast<char*>("zpub"), 0x05, child_84_0h_0h_0_pubKey, 0, child_84_0h_0h_0_0_pubPrefix);
 
     // Serialization
+    /*
     byte master_privKey_serialized[82];
     byte master_pubKey_serialized[82];
     std::string master_privKey_serialized_str;
@@ -511,7 +500,7 @@ int checkAddressCollisionWithTarget(const char* sentence, const char* passphrase
     serializeKey(child_84_0h_0h_0_privPrefix, child_84_0h_0h_0_privKey, child_84_0h_0h_0_chainCode, child_84_0h_0h_0_privKey_serialized, child_84_0h_0h_0_privKey_serialized_str);
     serializeKey(child_84_0h_0h_0_pubPrefix, child_84_0h_0h_0_pubKey, child_84_0h_0h_0_chainCode, child_84_0h_0h_0_pubKey_serialized, child_84_0h_0h_0_pubKey_serialized_str);
     std::string child_84_0h_0h_0_pubKey_addressP2WPKH = getAddressP2WPKH(child_84_0h_0h_0_pubKey);
-    
+    */
     byte child_84_0h_0h_0_0_privKey_serialized[82];
     byte child_84_0h_0h_0_0_pubKey_serialized[82];
     std::string child_84_0h_0h_0_0_privKey_serialized_str;
@@ -520,34 +509,45 @@ int checkAddressCollisionWithTarget(const char* sentence, const char* passphrase
     serializeKey(child_84_0h_0h_0_0_pubPrefix, child_84_0h_0h_0_0_pubKey, child_84_0h_0h_0_0_chainCode, child_84_0h_0h_0_0_pubKey_serialized, child_84_0h_0h_0_0_pubKey_serialized_str);
     std::string child_84_0h_0h_0_0_pubKey_addressP2WPKH = getAddressP2WPKH(child_84_0h_0h_0_0_pubKey);
 
-    // Print
-    std::cout << "\n======= DERIVATION TREE FOR BIP 84 ========\n";
-    std::cout << "master_privKey_serialized:               " << master_privKey_serialized_str << std::endl;
-    std::cout << "master_pubKey_serialized:                " << master_pubKey_serialized_str << std::endl;
-    std::cout << "master_pubKey_addressP2WPKH:             " << master_pubKey_addressP2WPKH << std::endl;
-    std::cout << std::endl;
-    std::cout << "child_84_privKey_serialized:             " << child_84_privKey_serialized_str << std::endl;
-    std::cout << "child_84_pubKey_serialized:              " << child_84_pubKey_serialized_str << std::endl;
-    std::cout << "child_84_pubKey_addressP2WPKH:           " << child_84_pubKey_addressP2WPKH << std::endl;
-    std::cout << std::endl;
-    std::cout << "child_84_0h_privKey_serialized:          " << child_84_0h_privKey_serialized_str << std::endl;
-    std::cout << "child_84_0h_pubKey_serialized:           " << child_84_0h_pubKey_serialized_str << std::endl;
-    std::cout << "child_84_0h_pubKey_addressP2WPKH:        " << child_84_0h_pubKey_addressP2WPKH << std::endl;
-    std::cout << std::endl;
-    std::cout << "child_84_0h_0h_privKey_serialized:       " << child_84_0h_0h_privKey_serialized_str << std::endl;
-    std::cout << "child_84_0h_0h_pubKey_serialized:        " << child_84_0h_0h_pubKey_serialized_str << std::endl;
-    std::cout << "child_84_0h_0h_pubKey_addressP2WPKH:     " << child_84_0h_0h_pubKey_addressP2WPKH << std::endl;
-    std::cout << std::endl;
-    std::cout << "child_84_0h_0h_0_privKey_serialized:     " << child_84_0h_0h_0_privKey_serialized_str << std::endl;
-    std::cout << "child_84_0h_0h_0_pubKey_serialized:      " << child_84_0h_0h_0_pubKey_serialized_str << std::endl;
-    std::cout << "child_84_0h_0h_0_pubKey_addressP2WPKH    " << child_84_0h_0h_0_pubKey_addressP2WPKH << std::endl;
-    std::cout << std::endl;
-    std::cout << "child_84_0h_0h_0_0_privKey_serialized:   " << child_84_0h_0h_0_0_privKey_serialized_str << std::endl;
-    std::cout << "child_84_0h_0h_0_0_pubKey_serialized:    " << child_84_0h_0h_0_0_pubKey_serialized_str << std::endl;
-    std::cout << "child_84_0h_0h_0_0_pubKey_addressP2WPKH  " << child_84_0h_0h_0_0_pubKey_addressP2WPKH << std::endl;
-    std::cout << std::endl;
-    
     if (strcmp(child_84_0h_0h_0_0_pubKey_addressP2WPKH.c_str(), TARGET_ADDRESS) == 0){
+        // Print
+        std::cout << "============== MASTER KEY =============" << std::endl;
+        std::cout << "Mnemonic sentence (human readable):    " << reinterpret_cast<const char*>(mnemonicSentence) << std::endl;
+        std::cout << "Mnemonic SALT (human readable):        " << reinterpret_cast<const char*>(mnemonicSalt) << std::endl;
+        std::cout << "Mnemonic sentence:                     " << byteToStr(mnemonicSentence, sizeof(mnemonicSentence)) << std::endl;
+        std::cout << "Mnemonic base:                         " << byteToStr(mnemBase, sizeof(mnemBase)) << std::endl;
+        std::cout << "Passphrase:                            " << byteToStr(mnemPassphrase, lengthOfPassphrase) << std::endl;
+        std::cout << "Mnemonic SALT:                         " << byteToStr(mnemonicSalt, sizeof(mnemonicSalt)) << std::endl;
+        std::cout << "SEED:                                  " << byteToStr(master_seed, sizeof(master_seed)) << std::endl;
+        std::cout << "MASTER PRIVATE KEY:                    " << byteToStr(master_privKey, sizeof(master_privKey)) << std::endl;
+        std::cout << "MASTER PUBLIC KEY:                     " << byteToStr(master_pubKey, sizeof(master_pubKey)) << std::endl;
+        std::cout << "Master chain code:                     " << byteToStr(master_chainCode, sizeof(master_chainCode)) << std::endl;
+        std::cout << std::endl;
+        std::cout << "\n======= DERIVATION TREE FOR BIP 84 ========\n";
+        //std::cout << "master_privKey_serialized:               " << master_privKey_serialized_str << std::endl;
+        //std::cout << "master_pubKey_serialized:                " << master_pubKey_serialized_str << std::endl;
+        //std::cout << "master_pubKey_addressP2WPKH:             " << master_pubKey_addressP2WPKH << std::endl;
+        //std::cout << std::endl;
+        //std::cout << "child_84_privKey_serialized:             " << child_84_privKey_serialized_str << std::endl;
+        //std::cout << "child_84_pubKey_serialized:              " << child_84_pubKey_serialized_str << std::endl;
+        //std::cout << "child_84_pubKey_addressP2WPKH:           " << child_84_pubKey_addressP2WPKH << std::endl;
+        //std::cout << std::endl;
+        //std::cout << "child_84_0h_privKey_serialized:          " << child_84_0h_privKey_serialized_str << std::endl;
+        //std::cout << "child_84_0h_pubKey_serialized:           " << child_84_0h_pubKey_serialized_str << std::endl;
+        //std::cout << "child_84_0h_pubKey_addressP2WPKH:        " << child_84_0h_pubKey_addressP2WPKH << std::endl;
+        //std::cout << std::endl;
+        //std::cout << "child_84_0h_0h_privKey_serialized:       " << child_84_0h_0h_privKey_serialized_str << std::endl;
+        //std::cout << "child_84_0h_0h_pubKey_serialized:        " << child_84_0h_0h_pubKey_serialized_str << std::endl;
+        //std::cout << "child_84_0h_0h_pubKey_addressP2WPKH:     " << child_84_0h_0h_pubKey_addressP2WPKH << std::endl;
+        //std::cout << std::endl;
+        //std::cout << "child_84_0h_0h_0_privKey_serialized:     " << child_84_0h_0h_0_privKey_serialized_str << std::endl;
+        //std::cout << "child_84_0h_0h_0_pubKey_serialized:      " << child_84_0h_0h_0_pubKey_serialized_str << std::endl;
+        //std::cout << "child_84_0h_0h_0_pubKey_addressP2WPKH    " << child_84_0h_0h_0_pubKey_addressP2WPKH << std::endl;
+        //std::cout << std::endl;
+        std::cout << "child_84_0h_0h_0_0_privKey_serialized:   " << child_84_0h_0h_0_0_privKey_serialized_str << std::endl;
+        std::cout << "child_84_0h_0h_0_0_pubKey_serialized:    " << child_84_0h_0h_0_0_pubKey_serialized_str << std::endl;
+        std::cout << "child_84_0h_0h_0_0_pubKey_addressP2WPKH  " << child_84_0h_0h_0_0_pubKey_addressP2WPKH << std::endl;
+        std::cout << std::endl;
         return 1;
     }
     return 0;
